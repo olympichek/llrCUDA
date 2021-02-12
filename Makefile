@@ -8,7 +8,7 @@ llrCUDA: lprime.o lmenu.o gwdbldbl.o gwypnum.o giants.o giantext.o
 gwypnum.o: gwypnum.cu
 	$(CUC) -g -O3 -I$(CUINC) -I. -Wno-deprecated-gpu-targets gwypnum.cu -c
 lprime.o: lprime.cu
-	$(CUC) -g -O -I$(CUINC) -I. -Wno-deprecated-gpu-targets lprime.cu -c
+	$(CUC) -g -O3 -I$(CUINC) -I. -Wno-deprecated-gpu-targets lprime.cu -c
 lmenu.o: lmenu.cu
 	$(CUC) -g -O3 -I$(CUINC) -I. -Wno-deprecated-gpu-targets lmenu.cu -c
 gwdbldbl.o: gwdbldbl.cpp

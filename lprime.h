@@ -47,6 +47,7 @@ extern int NO_GUI;
 #include "./giants.h"
 #include "./giantext.h"
 #include "./gwypnum.h"
+#include "./common.h"
 #include "Llr.h"
 
 /* Global variables */

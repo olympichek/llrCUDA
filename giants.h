@@ -137,6 +137,8 @@ void			init_sinCos(int);
 double			s_sin(int);
 double			s_cos(int);
 
+giant popg (void);
+void pushg (int);
 
 /* Creates a new giant, numshorts = INFINITY invokes the
  * maximum MAX_SHORTS. */

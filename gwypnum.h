@@ -26,18 +26,22 @@
 #define TIMER_OPT_CLR	0x4
 #define NBTIMERS 10
 
-// Global flags and data defined in gwypnumi.c file
+// Global flags and data defined in gwypnum.cu file
 
 extern	int FFTLEN;
 extern	int s_FFTLEN;//cuda
 extern  int g_fftlen;//cuda
+extern  unsigned long maxbitsinfftlen, maxbitsinfftword;
+                                    // JP 20/09/20
 extern	int MULBYCONST;
 extern	int zp;
 extern	int generic;
 extern	int inc;
 extern	int debug;
+extern	int tdebug;
 extern	int verbose;
 extern	int E_CHK;
+extern  int balerr;
 extern	double MAXERR;
 extern	double gwyptimers[];
 
@@ -45,8 +49,10 @@ typedef double* gwypnum;
 
 /* function prototypes */
 
+#define gwypsetnormroutine(z,e,c) {E_CHK=(e);MULBYCONST=(c);}
 #define gwypfree(ptr) if ((void*)ptr != NULL) {free (ptr); ptr = NULL;}
 #define gwypcudaFree(ptr) if ((void*)ptr != NULL) {cutilSafeCall(cudaFree (ptr)); ptr = NULL;}
+#define gwypswap(s,d)	{gwypnum t; t = s; s = d; d = t;}
 
 void gwypclear_timers (void);
 
@@ -93,16 +99,16 @@ void gwypsetoutputs (	// Get the pointers to user output functions
 );
 
 int
-gwypsetup(			// Initialize the gwypnum system
-	double,			// The multiplier
+gwypsetup(		// Initialize the gwypnum system
+	double,		// The multiplier
 	unsigned long,	// The base (generic mode forced if not two)
 	unsigned long,	// The exponent
 	signed long,	// c, in k*b^n+c (force generic reduction if neither +1 nor -1)
-	giant			// modulus
+	giant		// modulus
 );
 
 int gwypsetup_general_mod_giant (
-	giant			// The modulus of the modular reduction
+	giant		// The modulus of the modular reduction
 );
 
 void gwypset_larger_fftlen_count(
@@ -113,20 +119,20 @@ void gwypfft_description (
 	char *
 );
 
-gwypnum gwypalloc(			// Memory allocation
+gwypnum gwypalloc(	// Memory allocation
 );
 
-void itogwyp(				// Integer to gwypnum
+void itogwyp(		// Integer to gwypnum
 	int,
 	gwypnum
 );
 
-void gwypaddsmall(			// Add a small value to a gwypnum
+void gwypaddsmall(	// Add a small value to a gwypnum
 	gwypnum,
 	int
 );
 
-void gwypsetaddin(			// Set the addin constant before normalizing
+void gwypsetaddin(	// Set the addin constant before normalizing
 	long
 );
 
@@ -135,11 +141,11 @@ void gwypsetaddinatpowerofb (
 	unsigned long
 );
 
-void gwypsetmaxmulbyconst(	// Set the maximum of the multiplicative constant
+void gwypsetmaxmulbyconst(// Set the maximum of the multiplicative constant
 	long
 );
 
-void gwypsetmulbyconst(		// Set the multiplicative constant before normalizing
+void gwypsetmulbyconst(	// Set the multiplicative constant before normalizing
 	long
 );
 
@@ -160,25 +166,25 @@ void gwypcopy (
 	gwypnum
 );
 
-void					// Square a large integer
+void			// Square a large integer
 cuda_gwypsquare(
 	gwypnum,
 	int
 );
 
-void					// Square a large integer
+void			// Square a large integer
 gwypsquare(
 	gwypnum
 );
 
-void					// Multiply two large integers
+void			// Multiply two large integers
 cuda_gwypmul(
 	gwypnum,
 	gwypnum,
         int
 );
 
-void					// Multiply two large integers
+void			// Multiply two large integers
 gwypmul(
 	gwypnum,
 	gwypnum
@@ -231,21 +237,29 @@ void gwypmul_carefully (
 	gwypnum
 );
 
-#define gwypsetnormroutine(z,e,c) {E_CHK=(e);MULBYCONST=(c);}
-
-int					// Test is the large integer is zero
+int			// Test is the large integer is zero
 gwypiszero(
 	gwypnum
 );
 
-int	gwypequal (		// Test two gwypnums for equality
+int	gwypequal (	// Test two gwypnums for equality
 	gwypnum, 
 	gwypnum
 );
 
 /********************* Internal functions ***************************/
 
-double				// Normalize a large integer
+double gwyp_get_maxerr ();
+/*{
+	return (MAXERR);
+}*/
+
+void gwyp_clear_maxerr ();
+/*{
+	MAXERR = 0.0;
+}*/
+
+double			// Normalize a large integer
 gwypnormalize(
 	gwypnum
 );
@@ -263,6 +277,6 @@ void gwypsetzero (
 
 void	gwypdone (
 void
-);					// Free all the memory used by this code.
+);			// Free all the memory used by this code.
 
 #endif

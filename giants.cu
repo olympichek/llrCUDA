@@ -291,7 +291,7 @@ newgiant(
 	}
 	if (numshorts<=0)
 		numshorts = MAX_SHORTS;
-	size = numshorts*sizeof(short)+sizeof(int);
+	size = numshorts*sizeof(short)+sizeof(giantstruct);
 	thegiant = (giant)malloc(size);
 	thegiant->sign = 0;
 	

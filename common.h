@@ -10,11 +10,11 @@
 #ifndef _COMMON_H
 #define _COMMON_H
 
-#ifdef __cplusplus
+/*#ifdef __cplusplus
 #define EXTERNC extern "C"
 #else
 #define EXTERNC
-#endif
+#endif*/
 
 #define TRUE	1
 #define FALSE	0
@@ -46,5 +46,5 @@
 #ifdef GDEBUG
 #define strcpy(d,s)	assert((d) >= ((s)+strlen(s)+1) || (s) >= (d)+strlen(s)+1), safe_strcpy(d,s)
 #endif
-
+#define bittst(a,i)	(((char *)a)[(i) >> 3] & (1 << ((i) & 7)))
 #endif
