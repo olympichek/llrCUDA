@@ -203,6 +203,7 @@ int	NUM_JACOBI_BACKUP_FILES = 2;    // was 2
 int	RUN_ON_BATTERY = 1;
 int	TRAY_ICON = TRUE;
 int	HIDE_ICON = FALSE;
+int     mul_final = 0;
 double UNOFFICIAL_CPU_SPEED = 0.0;
 unsigned int WORKTODO_COUNT = 0;/* Count of valid work lines */
 unsigned int ROLLING_AVERAGE = 0;
@@ -3688,27 +3689,29 @@ int isPRPg (
 {
 
 	int	result = FALSE;
-	giant kbnc, known_factors, reduced_v, compare_val;
+	giant kbnc, known_factors, reduced_v, compare_val, prp_base_power;
+        
+        if (mul_final >=0) {            // "v" has been fully computed
 
 /* Standard Fermat PRP, test for one */
 
-	if (prp_residue_type == PRP_TYPE_FERMAT) return (isone (v));
+            if (prp_residue_type == PRP_TYPE_FERMAT) return (isone (v));
 
 /* SPRP test is PRP if result is one or minus one */
 
-	if (prp_residue_type == PRP_TYPE_SPRP || prp_residue_type == PROTH_TYPE) {
+            if (prp_residue_type == PRP_TYPE_SPRP || prp_residue_type == PROTH_TYPE) {
 		if (prp_residue_type == PRP_TYPE_SPRP && isone (v))
-			return (TRUE);
+                    return (TRUE);
 //		subg (v, N); result = isone (N); addg (v, N);
                 iaddg (1, v);
                 result = (gcompg (v, N) == 0);
                 iaddg (-1, v);
 		return (result);
-	}
+            }
 
 /* Handle the cofactor case.  We calculated v = a^(N*KF-1) mod (N*KF).  We have a PRP if (v mod N) = (a^(KF-1)) mod N */
 
-	if (prp_residue_type == PRP_TYPE_COFACTOR) {
+            if (prp_residue_type == PRP_TYPE_COFACTOR) {
 		// Calculate k*b^n+c
 		if (w->k > 0.0) {
 			kbnc = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
@@ -3740,36 +3743,93 @@ int isPRPg (
 		free (known_factors);
 		free (reduced_v);
 		free (compare_val);
-	}
+            }
 
-/* Handle the weird cases -- Fermat and SPRP variants, one of which gpuOwl uses 
-
-	else {
-		mpz_t	power;
-
-/* Calculate the compare_value 
-
-		mpz_init (power);
-		if (prp_residue_type == PRIMENET_PRP_TYPE_FERMAT_VAR) mpz_set_si (power, - (w->c - 1));
-		else mpz_set_si (power, - (w->c - 1) / 2);
-		mpz_set_ui (compare_val, prp_base);
-		mpz_powm (compare_val, compare_val, power, mpz_N);
-		mpz_clear (power);
-
-/* Now do the comparison(s) 
-
-		result = mpz_eq (mpz_v, compare_val);
-		if (prp_residue_type == PRIMENET_PRP_TYPE_SPRP_VAR && !result) {
-			mpz_sub (compare_val, mpz_N, compare_val);	// Negate compare val
-			result = mpz_eq (mpz_v, compare_val);
+        }
+        else {  // We must avoid to use the "invg" code which is too much time consuming...
+            
+		// Calculate k*b^n+c
+                if (w->k > 0.0) {
+			kbnc = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
+			known_factors = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
+			reduced_v = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
+			compare_val = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
+			itog ((unsigned long)w->k, kbnc);
 		}
-	}
+		else {
+			kbnc = newgiant ((w->n + bitlen(gk)) + 5);
+			known_factors = newgiant ((w->n + bitlen(gk)) + 5);
+			reduced_v = newgiant ((w->n + bitlen(gk)) + 5);
+			compare_val = newgiant ((w->n + bitlen(gk)) + 5);
+			gtog (gk, kbnc);
+		}
+		gshiftleft (w->n, kbnc);
+		iaddg (w->c, kbnc);
+                prp_base_power = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+                
+/* Calculate prp_base^power mod k*b^n+c */
 
-/* Cleanup and return 
+                itog (prp_base, prp_base_power);
+                powermod (prp_base_power, abs(mul_final), kbnc);
 
-	mpz_clear (mpz_v);
-	mpz_clear (mpz_N);
-	mpz_clear (compare_val);*/
+                
+/* Standard Fermat PRP, test for one */
+
+            if (prp_residue_type == PRP_TYPE_FERMAT)  {
+                result = (gcompg (v, prp_base_power) == 0);
+		free (kbnc);
+		free (known_factors);
+		free (reduced_v);
+		free (compare_val);
+                free (prp_base_power);
+                return (result);
+            }
+
+
+/* SPRP test is PRP if result is one or minus one */
+
+            if (prp_residue_type == PRP_TYPE_SPRP || prp_residue_type == PROTH_TYPE) {
+		if (prp_residue_type == PRP_TYPE_SPRP && gcompg (v, prp_base_power) == 0) {
+                    free (kbnc);
+                    free (known_factors);
+                    free (reduced_v);
+                    free (compare_val);
+                    free (prp_base_power);
+                    return (TRUE);
+                }
+                addg (prp_base_power, v);
+                modg (kbnc, v);
+                result = isZero(v);
+//		subg (v, N); result = isone (N); addg (v, N);
+                free (kbnc);
+                free (known_factors);
+                free (reduced_v);
+                free (compare_val);
+                free (prp_base_power);
+		return (result);
+            }
+
+/* Handle the cofactor case.  We calculated v = a^(N*KF-1) mod (N*KF).  We have a PRP if (v mod N) = (a^(KF-1)) mod N */
+
+            if (prp_residue_type == PRP_TYPE_COFACTOR) {
+		gtog (kbnc, known_factors);
+		divg (N, known_factors);
+		iaddg (-1, known_factors);
+		itog (prp_base, compare_val);
+		powermodg (compare_val, known_factors, kbnc);
+                mulg (prp_base_power, compare_val);
+		modg (N, compare_val);
+		modg (kbnc, v);
+		gtog (v, reduced_v);
+		modg (N, reduced_v);
+		result = (gcompg (reduced_v, compare_val) == 0);
+		free (kbnc);
+		free (known_factors);
+		free (reduced_v);
+		free (compare_val);
+                free (prp_base_power);
+            }
+        }
 	return (result);
 }
 
@@ -3785,7 +3845,7 @@ void basemulg (
 
 /* If power is zero, then multiply by base^0 is a no-op */
 
-	if (power == 0) return;
+	if (power <= 0) return;        // power < 0 is not processed here... 14/02/21
         
         modulus = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
         prp_base_power = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
@@ -3807,8 +3867,8 @@ void basemulg (
 	itog (prp_base, prp_base_power);
 	powermod (prp_base_power, abs(power), modulus);
 
-        if (power < 0)
-		invg (modulus, prp_base_power);	// to avoid using powermod with a negative exponent (probably due to a bug in giants.c).
+//        if (power < 0)        // invg is too much time consuming! 14/02/21
+//		invg (modulus, prp_base_power);	// to avoid using powermod with a negative exponent (probably due to a bug in giants.c).
 
 /* Multiply by prp_base_power to get the final result */
 
@@ -4220,7 +4280,7 @@ int GerbiczTest (
 	long	/*stop_counter = 0,*/ restart_counter = -1;	/* On a restart, this specifies how far back to rollback save files */
 	giant	exp, tmp, tmp2, tmp3; 
 //	struct	program_state ps;
-	int		interim_counter_off_one, interim_mul, mul_final, PositiveResult;
+	int		interim_counter_off_one, interim_mul, PositiveResult;
 	int	first_iter_msg, echk, gpuflag = 3; 
 	double	inverse_explen;
 	double	reallyminerr = 1.0; 
