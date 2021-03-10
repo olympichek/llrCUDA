@@ -3702,7 +3702,6 @@ int isPRPg (
             if (prp_residue_type == PRP_TYPE_SPRP || prp_residue_type == PROTH_TYPE) {
 		if (prp_residue_type == PRP_TYPE_SPRP && isone (v))
                     return (TRUE);
-//		subg (v, N); result = isone (N); addg (v, N);
                 iaddg (1, v);
                 result = (gcompg (v, N) == 0);
                 iaddg (-1, v);
@@ -3800,7 +3799,6 @@ int isPRPg (
                 addg (prp_base_power, v);
                 modg (kbnc, v);
                 result = isZero(v);
-//		subg (v, N); result = isone (N); addg (v, N);
                 free (kbnc);
                 free (known_factors);
                 free (reduced_v);
@@ -5504,12 +5502,14 @@ restart:
 
         IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc =  IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1);
         if (recovering || (nbfftinc == maxfftinc)) {
-            if (nbfftinc >= maxfftinc)
+            if (nbfftinc >= maxfftinc) {
                 OutputBoth ((char*)"Too much retries, restarting from the beginning using fewer GPU computing...\n");
+                unlinkSaveFiles (&write_save_file_state);
+            } 
             else
-                OutputBoth ((char*)"Restarting from the beginning using fewer GPU computing...\n");
+                OutputBoth ((char*)"Restarting using fewer GPU computing...\n");
             recovering = TRUE;
-            unlinkSaveFiles (&write_save_file_state);
+//            unlinkSaveFiles (&write_save_file_state);
         }
         
 	free (tmp);
