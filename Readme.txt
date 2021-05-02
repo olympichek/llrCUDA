@@ -1,5 +1,5 @@
 
-		Welcome to llrCUDA program Version 3.8.3 !
+		Welcome to llrCUDA program Version 3.8.4 !
 
 
 0) What is new in this version :

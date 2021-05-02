@@ -73,6 +73,8 @@ extern void print (double*, int);   // debugging tool...
 int it = 0;         //cuda ; init to zero, JP 22/06/17
 ssize_t wc = 0;     // default return value for write function. JP 29/11/20
 
+unsigned long format;
+
 // Some ABC format strings
 
 char ckstring[] = "(2^$a$b)^2-2";	// Carol/Kynea
@@ -141,6 +143,7 @@ char wftstring[] = "$a$b";
 
 char wfsstring[] = "$a$b$c";
 
+#define ABCDP	28  // Format used for DivPhi()
 
 
 /* Process a number from newpgen output file */
@@ -384,6 +387,13 @@ void OutputNum (
 
 #define MAX_ERROR_COUNT 5
 
+/* Routines missing from GMP */
+
+#define mpz_add_si(d,s,addin)	if (addin >= 0) mpz_add_ui(d,s,(unsigned int)addin); else mpz_sub_ui(d,s,(unsigned int)(-addin));
+#define mpz_mul_d(d,s,flt)	{ mpz_t t; mpz_init_set_d(t,flt); mpz_mul(d,s,t); mpz_clear(t); }
+#define mpz_eq(a,b)		mpz_cmp(a,b) == 0
+
+
 char ERROK[] = "Disregard last error.  Result is reproducible and thus not a hardware problem.\n";
 char ERRMSG0L[] = "Iter: %ld/%ld, %s";
 char ERRMSG0[] = "Bit: %ld/%ld, %s"; 
@@ -414,6 +424,56 @@ void	trace(int n) {			// Debugging tool...
         OutputStr (buf);
 }
 
+//  giant gcd and invert functions implementations using GNU MP library functions
+
+unsigned long gwypgcdui (giant g, unsigned long x) {
+    mpz_t rop, op1;
+    unsigned long result;
+    mpz_init (rop);             // allocate mpz memory
+    mpz_init (op1);
+    gtompz (g, op1);            // g ==> op1
+    result = mpz_gcd_ui (rop, op1, x);  // returns zero if x is zero, but then, gcd is g...
+    mpz_clear (rop);            // free mpz memory
+    mpz_clear (op1);
+    return (result);
+}
+
+void gwypgcdg (giant g1, giant g2) {
+    mpz_t rop, op1, op2;
+    mpz_init (rop);             // allocate mpz memory
+    mpz_init (op1);
+    mpz_init (op2);
+    gtompz (g1, op1);           // g1 ==> op1
+    gtompz (g2, op2);           // g2 ==> op2
+    mpz_gcd (rop, op1, op2);    // gcd (op1, op2) ==> rop
+    mpztog (rop, g2);           // rop ==> g2
+    mpz_clear (rop);            // free mpz memory
+    mpz_clear (op1);
+    mpz_clear (op2);
+}
+
+int gwypinvg (giant g1, giant g2) {
+    int result;
+    mpz_t rop, op1, op2;
+    mpz_init (rop);             // allocate mpz memory
+    mpz_init (op1);
+    mpz_init (op2);
+    gtompz (g1, op1);           // g1 ==> op1
+    gtompz (g2, op2);           // g2 ==> op2
+    result = mpz_invert (rop, op2, op1);    // invert of op2 mod op1 ==> rop
+    if (result == 0) {        
+        mpz_gcd (rop, op1, op2);
+        OutputBoth ((char*)"inverse does not exist, so, gcd is returned in second operand...\n");
+    }
+    mpztog (rop, g2);           // rop ==> g2
+    mpz_clear (rop);            // free mpz memory
+    mpz_clear (op1);
+    mpz_clear (op2);
+    return (result);
+}
+
+//*******************************************************************************
+    
 void clearline (int size) {
     char buf[256];
     int i;
@@ -3041,7 +3101,8 @@ int rotategp (				/* Return false if failed due to memory allocation error */
 	iaddg (w->c, modulus);
 	itog (1, vlo);
 	gshiftleft (shift_count, vlo);	// inverse of 2^shift_count modulo k*2^p+c
-        invg (modulus,vlo);
+//        invg (modulus,vlo);
+        gwypinvg (modulus,vlo);
         gtog (modulus, mvlo);
 	if ((w->c>0) && ((w->prp_residue_type==GMN_TYPE)?shift_count&2:shift_count&1))
 		subg (vlo, mvlo);					// change the sign if necessary
@@ -3689,10 +3750,8 @@ int isPRPg (
 {
 
 	int	result = FALSE;
-	giant kbnc, known_factors, reduced_v, compare_val, prp_base_power;
+	giant kbnc, known_factors, reduced_v, compare_val;
         
-        if (mul_final >=0) {            // "v" has been fully computed
-
 /* Standard Fermat PRP, test for one */
 
             if (prp_residue_type == PRP_TYPE_FERMAT) return (isone (v));
@@ -3744,145 +3803,50 @@ int isPRPg (
 		free (compare_val);
             }
 
-        }
-        else {  // We must avoid to use the "invg" code which is too much time consuming...
-            
-		// Calculate k*b^n+c
-                if (w->k > 0.0) {
-			kbnc = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
-			known_factors = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
-			reduced_v = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
-			compare_val = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
-			itog ((unsigned long)w->k, kbnc);
-		}
-		else {
-			kbnc = newgiant ((w->n + bitlen(gk)) + 5);
-			known_factors = newgiant ((w->n + bitlen(gk)) + 5);
-			reduced_v = newgiant ((w->n + bitlen(gk)) + 5);
-			compare_val = newgiant ((w->n + bitlen(gk)) + 5);
-			gtog (gk, kbnc);
-		}
-		gshiftleft (w->n, kbnc);
-		iaddg (w->c, kbnc);
-                prp_base_power = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-                
-/* Calculate prp_base^power mod k*b^n+c */
-
-                itog (prp_base, prp_base_power);
-                powermod (prp_base_power, abs(mul_final), kbnc);
-
-                
-/* Standard Fermat PRP, test for one */
-
-            if (prp_residue_type == PRP_TYPE_FERMAT)  {
-                result = (gcompg (v, prp_base_power) == 0);
-		free (kbnc);
-		free (known_factors);
-		free (reduced_v);
-		free (compare_val);
-                free (prp_base_power);
-                return (result);
-            }
-
-
-/* SPRP test is PRP if result is one or minus one */
-
-            if (prp_residue_type == PRP_TYPE_SPRP || prp_residue_type == PROTH_TYPE) {
-		if (prp_residue_type == PRP_TYPE_SPRP && gcompg (v, prp_base_power) == 0) {
-                    free (kbnc);
-                    free (known_factors);
-                    free (reduced_v);
-                    free (compare_val);
-                    free (prp_base_power);
-                    return (TRUE);
-                }
-                addg (prp_base_power, v);
-                modg (kbnc, v);
-                result = isZero(v);
-                free (kbnc);
-                free (known_factors);
-                free (reduced_v);
-                free (compare_val);
-                free (prp_base_power);
-		return (result);
-            }
-
-/* Handle the cofactor case.  We calculated v = a^(N*KF-1) mod (N*KF).  We have a PRP if (v mod N) = (a^(KF-1)) mod N */
-
-            if (prp_residue_type == PRP_TYPE_COFACTOR) {
-		gtog (kbnc, known_factors);
-		divg (N, known_factors);
-		iaddg (-1, known_factors);
-		itog (prp_base, compare_val);
-		powermodg (compare_val, known_factors, kbnc);
-                mulg (prp_base_power, compare_val);
-		modg (N, compare_val);
-		modg (kbnc, v);
-		gtog (v, reduced_v);
-		modg (N, reduced_v);
-		result = (gcompg (reduced_v, compare_val) == 0);
-		free (kbnc);
-		free (known_factors);
-		free (reduced_v);
-		free (compare_val);
-                free (prp_base_power);
-            }
-        }
 	return (result);
 }
 
-/* Mul giant by a power of the PRP or Proth base.  Used in optimizing PRPs for k*2^n+c numbers. */
+/* Mul giant by a power of the PRP base.  Used in optimizing PRPs for k*2^n+c numbers. */
 
-void basemulg (
+void basemulg (                         // 15/04/21 using now giant <-> GMP conversions 
 	giant	v,			/* Giant to multiply by base^power */
 	struct work_unit *w,		/* Number being tested */
 	unsigned int prp_base,		/* PRP base */
 	int	power)			/* Desired power of the PRP base */
 {
-	giant	modulus, prp_base_power;
+	mpz_t	modulus, prp_base_power, tmp;
 
 /* If power is zero, then multiply by base^0 is a no-op */
 
-	if (power <= 0) return;        // power < 0 is not processed here... 14/02/21
-        
-        modulus = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-        prp_base_power = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-        
+	if (power == 0) return;
+
 /* Generate the modulus (k*b^n+c), b is known to be 2 */
 
-	if (0/*w->k > 0.0*/) {
-		itog ((unsigned long)w->k, modulus);
-	}
-	else {
-		gtog (gk, modulus);
-	}
-
-	gshiftleft (w->n, modulus);
-	iaddg (w->c, modulus);
+//	mpz_init_set_d (modulus, w->k);
+        mpz_init (modulus);
+        gtompz (gk, modulus);           // 17/04/21 k may be a large integer...
+	mpz_mul_2exp (modulus, modulus, w->n);
+	mpz_add_si (modulus, modulus, w->c);
 
 /* Calculate prp_base^power mod k*b^n+c */
 
-	itog (prp_base, prp_base_power);
-	powermod (prp_base_power, abs(power), modulus);
+	mpz_init_set_si (tmp, power);
+	mpz_init_set_ui (prp_base_power, prp_base);
+	mpz_powm (prp_base_power, prp_base_power, tmp, modulus);
 
-//        if (power < 0)        // invg is too much time consuming! 14/02/21
-//		invg (modulus, prp_base_power);	// to avoid using powermod with a negative exponent (probably due to a bug in giants.c).
+/* Copy the giant value to tmp.  Multiply by prp_base_power to get the final result */
 
-/* Multiply by prp_base_power to get the final result */
-
-	mulg (prp_base_power, v);
-	modg (modulus, v);
+	gtompz (v, tmp);
+	mpz_mul (tmp, tmp, prp_base_power);
+	mpz_mod (tmp, tmp, modulus);
+	mpztog (tmp, v);
 
 /* Cleanup and return */
 
-	free (prp_base_power);
-	free (modulus);
+	mpz_clear (tmp);
+	mpz_clear (prp_base_power);
+	mpz_clear (modulus);
 }
-
-/* Open the save file for writing.  Either overwrite or generate a temporary */
-/* file name to write to, where we will rename the file after the file is */
-/* successully written. */
-
 
 /* Test if M divides a^(N-1) - 1 -- gwypsetup has already been called. */
 
@@ -4271,15 +4235,15 @@ int GerbiczTest (
 	char *str,
 	struct work_unit *w)
 {
-	unsigned long explen, final_counter, iters, errchk, bit, init_units_bit = 0/*, init_alt_units_bit = 0*/; 
-//	unsigned long restart_error_count = 0;		/* On a restart, use this error count rather than the one from a save file */
+	unsigned long explen, final_counter, iters, errchk, bit, init_units_bit = 0;
+        //	unsigned long restart_error_count = 0;	/* On a restart, use this error count rather than the one from a save file */
 	int	have_res2048;
-	unsigned long final_counter_y, max_counter, loopshift = 0, last_counter = 0xFFFFFFFF;	/* Iteration of last error */
+	unsigned long final_counter_y, max_counter, gerb_counter, loopshift = 0, last_counter = 0xFFFFFFFF;	/* Iteration of last error */
 	long	/*stop_counter = 0,*/ restart_counter = -1;	/* On a restart, this specifies how far back to rollback save files */
 	giant	exp, tmp, tmp2, tmp3; 
 //	struct	program_state ps;
-	int		interim_counter_off_one, interim_mul, PositiveResult;
-	int	first_iter_msg, echk, gpuflag = 3; 
+	int	interim_counter_off_one, interim_mul, PositiveResult;
+	int	first_iter_msg, echk, gpuflag = 3, iters_left = 0; 
 	double	inverse_explen;
 	double	reallyminerr = 1.0; 
 	double	reallymaxerr = 0.0; 
@@ -4315,7 +4279,6 @@ int GerbiczTest (
 
 	interim_counter_off_one = (ps.two_power_opt && w->k == 1.0 && w->c < 0);
 	interim_mul = (ps.two_power_opt && w->c < 0);
-
 
 /* Flag the PRP tests that require multiplying the final a^exp to account for c */
 
@@ -4389,6 +4352,10 @@ int GerbiczTest (
         explen = Nlen = bitlen (exp);
 	final_counter = explen - 1;
 	final_counter_y = (final_counter/2)-1;	// Warning : ps.counter starts from 0 !
+	if (ps.error_check_type == ERRCHK_GERBICZ) // 14/04/21
+            gerb_counter = final_counter-1049;  // max of L + min of iters_left 13/04/21
+        else
+            gerb_counter = final_counter;
 
 /* Allocate memory */
 
@@ -4404,6 +4371,11 @@ int GerbiczTest (
 /* Set the proper starting value and state if no save file was present */
 
 	if (ps.counter == 0) {
+            if (ps.residue_type == GMN_TYPE)
+                tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
+            else
+                tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+            itog (ps.prp_base, tmp3);
             /* For base==2 numbers, k==1 and abs(c)==1 we support FFT data shifting */
             if (w->b==2 && (w->k==1.0) && (abs(w->c)==1) && w->n>1000 && IniGetInt
                 (INI_FILE, (char*)"Shifting", 1)) {
@@ -4414,20 +4386,13 @@ int GerbiczTest (
                 init_units_bit = IniGetInt (INI_FILE, (char*)"InitialShiftCount", init_units_bit);
                 // Initial shift count can't be larger than n-64 (the -64 avoids wraparound in setting intial value)
                 init_units_bit = init_units_bit % (maxbitsinfftlen/2 - 64);
-                if (ps.residue_type == GMN_TYPE)
-                    tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
-                else
-                    tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-                itog (ps.prp_base, tmp3);
                 gshiftleft (init_units_bit, tmp3);
                 ps.units_bit = ps.alt_units_bit = init_units_bit;
-                gianttogwyp (tmp3, ps.x);
-                free (tmp3);
             } else {
                 ps.units_bit = ps.alt_units_bit = init_units_bit = 0;
-                itogwyp (ps.prp_base, ps.x);
             }
-
+            gianttogwyp (tmp3, ps.x);
+            free (tmp3);
             gwypcopy (ps.x, ps.y);	// temporary...
             ps.units_bit2 = 0;
 
@@ -4481,12 +4446,12 @@ int GerbiczTest (
 			if (w->k != 1.0) {
                             ps.state = STATE_DCHK_PASS1;
                             ps.start_counter = 0;
-                            if (w->k>0.0)
+                            if (w->k != 0.0)
                                 ps.end_counter = (int)ceil(_log2(w->k));
                             else
                                 ps.end_counter = bitlen (gk);
 			} else {
-				ps.state = STATE_GERB_START_BLOCK;
+                            ps.state = STATE_GERB_START_BLOCK;
 			}
 		}
 	}              // end ps.counter == 0
@@ -4631,7 +4596,7 @@ int GerbiczTest (
 
 		if (ps.state == STATE_GERB_START_BLOCK) {
  
-			int	iters_left = final_counter - ps.counter;
+                    	iters_left = final_counter - ps.counter;
 			if (iters_left < 49) {
 				ps.state = STATE_DCHK_PASS1;
 				ps.start_counter = ps.counter;
@@ -4759,19 +4724,25 @@ int GerbiczTest (
                             last_counter = 0xFFFFFFFF;
                             echk = 0;
                             care = TRUE;
-			} else if (ps.counter <= (50+loopshift) || ps.counter >= (max_counter-50)) {
-                            gwypsquare_carefully (x);
+			} else if (ps.counter <= (50+loopshift) || ps.counter > (/*max (gerb_counter,*/ max_counter-40)) {             // 10/04/21
+                            gwypsquare_carefully (x);   // 40 in place of 50 06/04/21
 //                            gwypsquare (x);
                             care = TRUE;
                         }
-                        else if (cufftonly) {
+                        else if (cufftonly)
+                            {
+                            gwypsquare (x);
+                            care = TRUE;
+                        }
+                        else if ((ps.error_check_type == ERRCHK_GERBICZ) && (ps.counter > gerb_counter))
+                            {
                             gwypsquare (x);
                             care = TRUE;
                         }
                         else {
                             if (zp || generic || (ps.counter <= (51+loopshift)))
                                 gpuflag = 3;
-                            else if  (ps.counter >= (max_counter-51))
+                            else if  (ps.counter >= max_counter-41)   // 41 in place of 51 06/04/21
                                 gpuflag = 2;
                             else if (saving)
                                 gpuflag = 2;
@@ -4781,7 +4752,9 @@ int GerbiczTest (
                             }
                             else if ((ps.error_check_type == ERRCHK_DBLCHK) && (ps.counter == (ps.end_counter-1)))
                                 gpuflag = 2;
-                            else if ((ps.error_check_type == ERRCHK_GERBICZ) && (ps.counter==(ps.next_mul_counter-1)))
+                            else if (/*(ps.error_check_type == ERRCHK_GERBICZ) &&*/ (ps.counter==(ps.next_mul_counter-1)))
+                                gpuflag = 2;
+                            else if ((ps.error_check_type == ERRCHK_GERBICZ) && (ps.counter>(gerb_counter-1)))
                                 gpuflag = 2;
                             else if ((ps.error_check_type == ERRCHK_GERBICZ)
                                 && (x == ps.alt_x))
@@ -4810,7 +4783,6 @@ int GerbiczTest (
 		
 		if (balerr) {
                     OutputBoth ((char*)"Normalization error, restarting from the beginning using fewer GPU computing...\n");
-//                    cufftonly = TRUE;
                     recovering = TRUE;
                     unlinkSaveFiles (&write_save_file_state);
                     goto restart;
@@ -5047,10 +5019,6 @@ int GerbiczTest (
 		// Just did a normal PRP squaring
 
 		if (ps.state == STATE_GERB_MID_BLOCK) {
-/*                        if (!zeroed_d && gwypiszero (ps.d)) {
-                            zeroed_d = TRUE;
-                            trace (ps.counter);
-                        }*/
 			if (ps.counter < ps.next_mul_counter)
                             ;
 						// Do next iteration
@@ -5158,7 +5126,7 @@ int GerbiczTest (
 			ps.alt_units_bit = ps.units_bit;
 			/* We've reached a verified iteration, create a save file and mark it highly reliable. */
 			/* But if there are less than 1000 iterations left on a reliable machine, don't bother creating the save file. */
-			if (final_counter - ps.counter >= 1000 || gerbicz_block_size_adjustment < 1.0) {
+			if (1/*final_counter - ps.counter >= 1000 || gerbicz_block_size_adjustment < 1.0*/) {
 				saving = TRUE;
 				saving_highly_reliable = TRUE;
 			}
@@ -5251,9 +5219,10 @@ int GerbiczTest (
 		bit++;
 	}
         
-/* Free up some memory */
+/* Restaure the default adjustment, and free up some memory */
 
 	if (ps.error_check_type == ERRCHK_GERBICZ) {
+            IniWriteFloat (INI_FILE, "PRPGerbiczCompareIntervalAdj", 1.0);
             gwypfree (ps.u0);
             gwypfree (ps.d);
         }
@@ -5281,9 +5250,10 @@ int GerbiczTest (
 	}
 	
 	rotategp (tmp, (ps.residue_type == GMN_TYPE)?2*(w->n):w->n, ps.units_bit);
-        
-	if (mul_final)
+
+        if (mul_final)
 		basemulg (tmp, w, ps.prp_base, mul_final);
+         
                 
 	if (w->known_factors && ps.residue_type != PRP_TYPE_COFACTOR)
 		modg (N, tmp);
@@ -5474,9 +5444,7 @@ int GerbiczTest (
 
 	}
 	
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	lasterr_point = 0;
-        recovering = FALSE;
 	return (TRUE);
 
 /* An error occured, output a message saying we are restarting, sleep, */
@@ -5550,7 +5518,6 @@ int commonFrobeniusPRP (
 
 
 /* Allocate memory */
-
 	x = gwypalloc ();
 	y = gwypalloc ();
 	gwA = gwypalloc ();
@@ -5566,14 +5533,14 @@ int commonFrobeniusPRP (
         
 //	Compute needed large integer and gwypnum constants
 
-//	dbltogw (2.0, gw2);
 	itogwyp (2, gw2);
 	itog (Q, tmp);	        // Compute gwQ for Frobenius test
 	if (Q < 0)
-		addg (N, tmp);	// only a positive giant can be converted to gwypnum
+            addg (N, tmp);	// only a positive giant can be converted to gwypnum
 	gianttogwyp (tmp, gwQ);
 	gtog (tmp, A);		// Compute A = P*P*Q^-1 - 2 mod N
-	invg (N, A);
+//	invg (N, A);
+	gwypinvg (N, A);
 	ulmulg (P*P, A);
 	iaddg (-2, A);
 	modg (N, A);
@@ -5642,8 +5609,9 @@ int commonFrobeniusPRP (
 				writeResults (buf);
 
 			bit = 1;
-//			dbltogw (2.0, x);			// Initial values
 			itogwyp (2, x);		// Initial values
+//                        itog (2, tmp);
+//                        gianttogwyp (tmp, x);
 			gwypcopy (gwA, y);
 //			if (! writeToFile (filename, bit, x, y)) {
 //				sprintf (buf, WRITEFILEERR, filename);
@@ -5705,7 +5673,8 @@ int commonFrobeniusPRP (
 		gwypsetnormroutine (0, echk, 0);
 
 		if (bitval (tmp3, Nlen-bit)) {
-			gwypsetaddin (0);
+//			if (abs(inc)==1)
+                            gwypsetaddin (0);
 			if ((bit+26 < Nlen) && (bit > 26) &&
 				((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
                             gpuflag = 3;
@@ -5740,7 +5709,8 @@ int commonFrobeniusPRP (
 				gwypsubquick (gw2, y);
 		}
 		else {
-			gwypsetaddin (0);
+//			if (abs(inc)==1)
+                            gwypsetaddin (0);
 			if ((bit+26 < Nlen) && (bit > 26) &&
 				((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
                             gpuflag = 3;
@@ -5885,7 +5855,7 @@ int commonFrobeniusPRP (
 			}
 		}
 	}
-
+	
 /* See if we've found a Lucas probable prime.  If not, format a 64-bit residue. */
 
 	clearline (100);
@@ -5925,8 +5895,7 @@ int commonFrobeniusPRP (
 		tempFileName (filename, 'F', N);  // Reinit file name
 
 		bit = 1;
-//		dbltogw ((double)Q, y);
-		itogwyp (Q, y);
+                gwypcopy (gwQ, y);
 //		lasterr_point = 0;			// Reset a possible Lucas roundoff error point
 		if (IniGetInt(INI_FILE, (char*)"LucasPRPtest", 0))
 			if (bpsw)
@@ -6382,11 +6351,11 @@ int commonPRP (
 	else {
 		gwypclear_timers ();	// Init. timers
  		if(!usingDivPhi_m) {
-		if (showdigits)
+                    if (showdigits)
 			sprintf (buf, "Starting probable prime test of %s (%d decimal digits)\n", quotient?string_rep:str, nbdg);
-		else
+                    else
 			sprintf (buf, "Starting probable prime test of %s\n", quotient?string_rep:str);
-		OutputStr (buf);
+                    OutputStr (buf);
                 }
 		if (verbose)
 			writeResults (buf);
@@ -6613,7 +6582,7 @@ int commonPRP (
 	else {
 
             gwyptogiant (x, tmp);
-            modg (N, tmp);
+            modg ((quotient||(format == ABCDP))?M:N, tmp);
 
             if (!isone (tmp)) {
 		*res = FALSE;	/* Not a prime */
@@ -7242,8 +7211,8 @@ int commonCC2P (
 		double	pct;
 		pct = trunc_percent (bit * 100.0 / explen);
 		sprintf (fmt_mask,
-			 "Resuming Lucas sequence at bit %%ld [%%.%df%%%%]\n",
-			 PRECISION);
+			 "Resuming Morrison prime test of %s at bit %%ld [%%.%df%%%%]\n",
+			 str, PRECISION);
 		sprintf (buf, fmt_mask, bit, pct);
 		OutputStr (buf);
 		if (verbose)
@@ -7258,10 +7227,9 @@ int commonCC2P (
 		gwypclear_timers ();	// Init. timers
 		D = P*P-4;
 		if (showdigits)
-			sprintf (buf, "Starting Lucas sequence (%d decimal digits)\n", nbdg);
+			sprintf (buf, "Starting Morrison prime test of %s (%d decimal digits)\n", str, nbdg);
 		else
-			sprintf (buf, "Starting Lucas sequence\n");
-		OutputStr (buf);
+			sprintf (buf, "Starting Morrison prime test of %s\n", str);
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);
@@ -7272,7 +7240,8 @@ int commonCC2P (
 	}
 
 	itog (D, tmp3);    // Compute the inverse of D modulo N
-	invg (N, tmp3);
+//	invg (N, tmp3);
+	gwypinvg (N, tmp3);
 	gianttogwyp (tmp3, gwypinvD);  // Convert it to gwypnum
 
 /* Get the current time */
@@ -7652,8 +7621,8 @@ int fastIsPRP (
 	char *str,
 	int	*res)
 {
-	int	retval, a;
-
+	int	retval, a, gcdNa;
+        char    buf[1024];
 
 	if (bpsw)
 		a = IniGetInt (INI_FILE, (char*)"FBase", 2);
@@ -7661,9 +7630,18 @@ int fastIsPRP (
 		a = IniGetInt (INI_FILE, (char*)"FBase", 3);
  	if (usingDivPhi_m) 
 		a = 2;
-        
-	// init work_unit used by the Gerbicz code
 
+//      Test if the candidate is coprime to the PRP base...
+        
+        gcdNa = gwypgcdui (N, a);
+        if ((format != ABCDP) && (gcdNa != 1)) {
+            sprintf (buf, "%s has a small factor : %d\n", str, gcdNa);
+            OutputStr (buf);
+            return (TRUE);
+        }
+
+//      Init work_unit used by the Gerbicz code
+        
 	w->k = k;
 	w->n = n;
 	w->b = b;
@@ -7677,7 +7655,7 @@ int fastIsPRP (
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 		gwypsetmaxmulbyconst (a);
-		if (!setupok (gwypsetup (k, b, n, c,quotient?M:N), N, str, res)) {
+		if (!setupok (gwypsetup (k, b, n, c,(quotient||(format == ABCDP))?M:N), N, str, res)) {
 			return TRUE;
 		}
 
@@ -7694,8 +7672,6 @@ int fastIsPRP (
         
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 //	gwypdone ();
 	return (retval);
 }
@@ -7725,13 +7701,12 @@ int fastIsCC1P (
 /* Do the Pocklington test */
 
 		retval = commonCC1P (a, res, str);
+                gwypdone ();
 	} while (retval == -1);
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 	return (retval);
 }
 
@@ -7773,13 +7748,12 @@ int fastIsCC2P (
 /* Do the Morrison test */
 
 		retval = commonCC2P (P, res, str);
+                gwypdone ();
 	} while (retval == -1);
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 	return (retval);
 }
 
@@ -7844,6 +7818,8 @@ int fastIsFrobeniusPRP (
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 		gwypsetmaxmulbyconst (max (3, Q));
+                if (recovering)
+                    cufftonly = TRUE;   // 19/04/21
 		if (!setupok (gwypsetup (k, b, n, c, N), N, str, res)) {
 			return TRUE;
 		}
@@ -7851,14 +7827,13 @@ int fastIsFrobeniusPRP (
 /* Do the Frobenius PRP test */
 
 		retval = commonFrobeniusPRP (P, Q, res, str);
+                gwypdone ();
 
 	} while (retval == -1);
 
 /* Clean up and return */
 	
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 	return (retval);
 }
 
@@ -7919,6 +7894,8 @@ int slowIsFrobeniusPRP (
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 		gwypsetmaxmulbyconst (max (3, Q));
+                if (recovering)
+                    cufftonly = TRUE;   // 19/04/21
 		if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
 			return TRUE;
 		}
@@ -7926,14 +7903,12 @@ int slowIsFrobeniusPRP (
 /* Do the Frobenius PRP test */
 
 		retval = commonFrobeniusPRP (P, Q, res, str);
+                gwypdone ();
 
 	} while (retval == -1);
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
 	return (retval);
 }
 /* Test if N is a Wieferich prime.  The number N can be of ANY form. */
@@ -7964,7 +7939,7 @@ int slowIsWieferich (
 /* Do the divisibility test */
 
 		retval = isexpdiv (a, N, M, res);
-//                gwypdone ();
+                gwypdone ();
 
 	} while (retval == -1);
 
@@ -7981,9 +7956,7 @@ int slowIsWieferich (
 /* Clean up and return */
 
 	gwypfree (M);
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 
 	return (retval);
 }
@@ -8012,7 +7985,8 @@ int slowIsPRP (
 	char	*str,		/* string representation of N */
 	int	*res)
 {
-	int	retval, a;
+	int	retval, a, gcdNa;
+        char    buf[1024];
 
 /* Setup the gwypnum code */
 
@@ -8020,8 +7994,20 @@ int slowIsPRP (
 		a = IniGetInt (INI_FILE, (char*)"FBase", 2);
 	else
 		a = IniGetInt (INI_FILE, (char*)"FBase", 3);
+ 	if (usingDivPhi_m) 
+		a = 2;
+        
+//      Test if the candidate is coprime to the PRP base...
 
-	// init work_unit used by the Gerbicz code
+        gcdNa = gwypgcdui (N, a);
+        if ((format != ABCDP) && (gcdNa != 1)) {
+            sprintf (buf, "%s has a small factor : %d\n", str, gcdNa);
+            OutputStr (buf);
+            return (TRUE);
+        }
+        
+
+//      Init work_unit used by the Gerbicz code
 
 	w->prp_base = a;
 	w->prp_residue_type = strong? PRP_TYPE_SPRP : PRP_TYPE_FERMAT;
@@ -8032,7 +8018,7 @@ int slowIsPRP (
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 		gwypsetmaxmulbyconst (a);
-		if (!setupok (gwypsetup_general_mod_giant (quotient?M:N), N, str, res)) {
+		if (!setupok (gwypsetup_general_mod_giant (quotient||(format == ABCDP)?M:N), N, str, res)) {
 			return TRUE;
 		}
 
@@ -8051,8 +8037,6 @@ int slowIsPRP (
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 //	gwypdone ();
 	return (retval);
 }
@@ -8080,13 +8064,12 @@ int slowIsCC1P (
 /* Do the Pocklington test */
 
 		retval = commonCC1P (a, res, str);
+                gwypdone ();
 	} while (retval == -1);
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 	return (retval);
 }
 
@@ -8124,13 +8107,12 @@ int slowIsCC2P (
 /* Do the Morrison test */
 
 		retval = commonCC2P (P, res, str);
+                gwypdone ();
 	} while (retval == -1);
 
 /* Clean up and return */
 
-	if (retval == TRUE)
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
-	gwypdone ();
+//	gwypdone ();
 	return (retval);
 }
 
@@ -8173,7 +8155,6 @@ int isPRPinternal (
 	fcontinue = fileExists (filename);
 	tempFileName (filename, 'F', N);
 	fcontinue = fcontinue || fileExists (filename);
-
 	if (dk >= 1.0) {
             if (fcontinue || IniGetInt(INI_FILE, (char*)"LucasPRPtest", 0)) {
                 if (!fcontinue)
@@ -8181,11 +8162,9 @@ int isPRPinternal (
                 retval = fastIsFrobeniusPRP (dk, base, n, incr, str, res);
             }
             else {
-               retval = fastIsPRP (dk, base, n, incr, str, res);
+                retval = fastIsPRP (dk, base, n, incr, str, res);
                 if (retval && *res && !fermat_only && !IniGetInt(INI_FILE, (char*)"FermatPRPtest", 0))
                     retval = fastIsFrobeniusPRP (dk, base, n, incr, str, res);
-                else if (retval == TRUE)// If not stopped by user...
-                    IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
             }
 	}
 	else if (Nlen < 50) {
@@ -8216,8 +8195,6 @@ int isPRPinternal (
                 retval = slowIsPRP (str, res);
                 if (retval && *res && !fermat_only && !IniGetInt(INI_FILE, (char*)"FermatPRPtest", 0))
                     retval = slowIsFrobeniusPRP (str, res);
-                else if (retval == TRUE)// If not stopped by user...
-                    IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
             }
 	}
 	return retval;
@@ -8257,8 +8234,6 @@ int gisPRPinternal (
 			retval = fastIsPRP (dk, smallbase, n, incr, str, res);
 			if (retval && *res && !fermat_only && !IniGetInt(INI_FILE, (char*)"FermatPRPtest", 0))
 				retval = fastIsFrobeniusPRP (dk, smallbase, n, incr, str, res);
-			else if (retval == TRUE)// If not stopped by user...
-				IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 		}
 	}
 	else if (Nlen < 50) {
@@ -8290,8 +8265,6 @@ int gisPRPinternal (
 			retval = slowIsPRP (str, res);
 			if (retval && *res && !fermat_only && !IniGetInt(INI_FILE, (char*)"FermatPRPtest", 0))
 				retval = slowIsFrobeniusPRP (str, res);
-			else if (retval == TRUE)// If not stopped by user...
-				IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 		}
 	}
 	return retval;
@@ -8330,7 +8303,7 @@ int gisPRPinternal (
 #define ABCWFT	25  // Format used for Wieferich test
 #define ABCWFS	26  // Format used for Wieferich search
 #define ABCGPT	27  // Format used for General prime test (APRCL)
-#define ABCDP	28  // Format used for DivPhi()
+//#define ABCDP	28  // Format used for DivPhi()
 
 int IsPRP (	    // General PRP test
 	unsigned long format, 
@@ -8408,13 +8381,17 @@ int IsPRP (	    // General PRP test
 		iaddg (-1, gk);
 		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n+ndiff, base, n, incr < 0 ? '-' : '+', abs(incr));
 	}
-	
 	bits = (unsigned long) ((n * log(base)) / log(2) + bitlen(gk)); 
 	N =  newgiant ((bits >> 2) + 8);   // Allocate memory for N
 
  	if (format == ABCDP) {
+            M =  newgiant ((bits >> 2) + 8);   // Allocate memory for M
  		globalk = dk = (double)gk->n[0]; 
-// 		Fermat_only = TRUE;
+ 		fermat_only = TRUE;  // 25/04/21
+ 		gtog (gb, M);        // 26/04/21 compute the correct modulus!
+                power (M, n);
+                addg (M, M);
+                iaddg (1, M);
  		for(usingDivPhi_m = n; usingDivPhi_m > 0; usingDivPhi_m--) {
  			sprintf (buf, "Starting test if %s divides Phi(%s^%d,2)\n", str, sgb, usingDivPhi_m);
 			OutputStr (buf);
@@ -8428,8 +8405,9 @@ int IsPRP (	    // General PRP test
 			sprintf(buf, "Conclusion: %s Divides Phi(%s^%d,2)\n", str, sgb, usingDivPhi_m+1);
 			OutputBoth (buf);
 		}
- 		/*Fermat_only = */usingDivPhi_m = FALSE;
+ 		fermat_only = usingDivPhi_m = 0; //  0 in place of FALSE 24/04/21 */
  		free (N);
+                free (M);
  		free (gk);
  		return retval;
  	}
@@ -9342,7 +9320,8 @@ restart:
 
 
 	itog (D, tmp);						// Compute inverse of D modulo N
-	invg (modulus, tmp);
+//	invg (modulus, tmp);
+	gwypinvg (modulus, tmp);
 	gianttogwyp (tmp, gwinvD);	// Convert it to gwypnum
 	gtog (modulus, tmp);				// Compute inverse of 2 modulo N
 	iaddg (1, tmp);						// Which is (N+1)/2
@@ -9951,7 +9930,8 @@ restart:
 //				break;
 			}
 			else {
-				gcdg (modulus, tmp);
+//				gcdg (modulus, tmp);
+				gwypgcdg (modulus, tmp);
 				if (isone (tmp)) {
 					sprintf (buf, "U((N+1)/%lu) is coprime to N!\n", bpf[j]);
 					OutputStr (buf);
@@ -10007,7 +9987,6 @@ restart:
 	if (frestart)
 		return -2;
 	else {
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 		return TRUE;
 	}
 
@@ -10739,7 +10718,8 @@ DoLucas:
                         }
                         else {
                             iaddg (-1, tmp);
-                            gcdg (N, tmp);
+//                            gcdg (N, tmp);
+                            gwypgcdg (N, tmp);
                             if (isone (tmp)) {
                                 sprintf (buf, "%ld^((N-1)/%lu)-1 is coprime to N!\n", a, bpf[j]);
                                 OutputStr (buf);
@@ -10826,7 +10806,6 @@ DoLucas:
 //	gwypdone ();
 	if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
 		IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	return (TRUE);
 
 /* An error occured, sleep, then try restarting at last save point. */
@@ -10852,7 +10831,6 @@ error:
             _unlink (filename);
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
-            IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
                 IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
@@ -10992,7 +10970,8 @@ restart:
 
 
 	itog (D, tmp);						// Compute inverse of D modulo N
-	invg (modulus, tmp);
+//	invg (modulus, tmp);
+	gwypinvg (modulus, tmp);
 	gianttogwyp (tmp, gwinvD);	// Convert it to gwypnum
 	gtog (modulus, tmp);		// Compute inverse of 2 modulo N
 	iaddg (1, tmp);			// Which is (N+1)/2
@@ -11600,7 +11579,8 @@ restart:
 //				break;
 			}
 			else {
-				gcdg (modulus, tmp);
+//				gcdg (modulus, tmp);
+				gwypgcdg (modulus, tmp);
 				if (isone (tmp)) {
                                     gtoc(gbpf[j], bpfstring, strlen(sgb));
                                     sprintf (buf, "U((N+1)/%s) is coprime to N!\n", bpfstring);
@@ -11657,7 +11637,6 @@ restart:
 	if (frestart)
 		return -2;
 	else {
-		IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 		return TRUE;
 	}
 
@@ -12484,7 +12463,8 @@ DoLucas:
                         }
                         else {
                             iaddg (-1, tmp);
-                            gcdg (N, tmp);
+//                            gcdg (N, tmp);
+                            gwypgcdg (N, tmp);
                             if (isone (tmp)) {
 //                                sprintf (buf, "%ld^((N-1)/%lu)-1 is coprime to N!\n", a, bpf[j]);
                                 if (bpf[j] == 1) {
@@ -12578,7 +12558,6 @@ DoLucas:
 //	gwypdone ();
 	if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
 		IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	return (TRUE);
 
 /* An error occured, sleep, then try restarting at last save point. */
@@ -12604,7 +12583,6 @@ error:
             _unlink (filename);
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
-            IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
                 IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
@@ -12795,6 +12773,7 @@ int isLLRP (
 
 		gwypfree(gk);
 		gwypfree(N);
+//                recovering = FALSE;       // 20/04/21
 		return retval;
 	}
 	else if (klen > 53)        // k is a big integer
@@ -12816,6 +12795,7 @@ int isLLRP (
 		if (!*res) {
 			gwypfree(gk);
 			gwypfree(N);
+//                        recovering = FALSE;       // 20/04/21
 			return retval;
 		}
 		IniWriteInt(INI_FILE, (char*)"PRPdone", 1);
@@ -12853,7 +12833,7 @@ restart:
 		gwypfree(gk);
 		gwypfree(N);
 //		*res = FALSE;
-		return TRUE;
+                return TRUE;
 	}
 		
 	x = gwypalloc (); 
@@ -13461,7 +13441,6 @@ MERSENNE:
 	_unlink (filename); 
 	if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
 		IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	lasterr_point = 0;
         g_fftlen = 0;
 	return (TRUE); 
@@ -14053,13 +14032,10 @@ int isGMNP (
 		iaddg (1, tmp);	// Compute the (unnormalized) residue
 	}
 	else {
-//		invg (N, tmp2);
-//		mulg (tmp2, tmp);
-                addg (tmp2, tmp);
+		gwypinvg (N, tmp2);   // 19/04/21 residue must match with LLR 3.8.24
+		mulg (tmp2, tmp);
 		modg (N, tmp);
-//              if (tmp->sign<0)
-                addg (N, tmp);
-//		iaddg (1, tmp);
+		iaddg (1, tmp);
 	}
 	
 /* See if we've found a Proth prime.  If not, format a 64-bit residue. */
@@ -14249,7 +14225,6 @@ EXIT:
 	gwypfree(NP);
 	gwypfree(M);
 //        gwypdone();
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	lasterr_point = 0;
         
 
@@ -14615,7 +14590,8 @@ restart:
 
 			itog (1, tmp2);					// Restore the value of x from the shifted one.
 			gshiftleft (ubx, tmp2);
-			invg (M,tmp2);
+//			invg (M,tmp2);
+			gwypinvg (M,tmp2);
 			gtog (M, tmp);
 			if (ubx&1)						// View if a sign change on x is necessary.
 				subg (tmp2, tmp);
@@ -14658,7 +14634,8 @@ restart:
 
 	itog (1, tmp2);					// Restore the value of x from the shifted one.
 	gshiftleft (ubx, tmp2);
-	invg (M,tmp2);
+//	invg (M,tmp2);
+	gwypinvg (M,tmp2);
 	gtog (M, tmp);
 	if (ubx&1)						// View if a sign change on x is necessary.
 		subg (tmp2, tmp);
@@ -14676,7 +14653,8 @@ restart:
 	}
 	else {
 		itog (a*a, tmp2);
-		invg (NP, tmp2);		// a^(-2) modulo NP
+//		invg (NP, tmp2);		// a^(-2) modulo NP
+		gwypinvg (NP, tmp2);		// a^(-2) modulo NP
 		mulg (tmp2, tmp);		// tmp = a^(2^n-2) = a^(3*(NP-1)) --> the very base is a^3 !!
 		modg (NP, tmp);			// Compute the (unnormalized) residue modulo NP
 	}
@@ -14724,7 +14702,8 @@ restart:
 	else if (!dovrbareix) {			// May be a prime, continue the SPRP test
 		itog (1, tmp2);				// Restore the value of y from the shifted one.
 		gshiftleft (uby, tmp2);
-		invg (M,tmp2);
+//		invg (M,tmp2);
+		gwypinvg (M,tmp2);
 		gtog (M, tmp);
 		if (uby&1)					// View if a sign change on y is necessary.
 			subg (tmp2, tmp);
@@ -14791,7 +14770,6 @@ restart:
 	gwypfree (tmp2);
 	gwypfree (x);
 	gwypfree (y);
-	IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
 	lasterr_point = 0;
 	gwypdone ();
 	_unlink (filename);
@@ -14966,7 +14944,7 @@ int process_num (
 // Lei mod
         if (format == ABCDP) {
             retval = IsPRP (format, sgk, base, n, incr, shift, res);
-//            free (gb); return (retval);
+            free (gb); return (retval);
         }
         if (((base == 2) || (superPRP == 0)) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0) && ((incr == -1) || (incr == +1)) && (format != ABCVARAQS)) {
             if (incr == -1)
@@ -15011,7 +14989,7 @@ int primeContinue ()
 {
 
     int	work, nargs, hiline, completed = FALSE;
-    unsigned long format, shift, begline, rising_ns, rising_ks, last_processed_n;
+    unsigned long /*format, */shift, begline, rising_ns, rising_ks, last_processed_n;
     char *pinput;
 
 /* Set appropriate priority */
@@ -15357,14 +15335,14 @@ OPENFILE :
                         if (c == '1') nfudge = 1;
                         if (c == '2') nfudge = 1;
                         if (c == '3') nfudge = 1;
-                        if (c == 'P') c = '2', chainlen = 1;
-                        if (c == 'M') c = '1', chainlen = 1;
-//		        if (c == 'Y') c = '2', chainlen = 1;
-//			if (c == 'Z') c = '1', chainlen = 1;
-                        if (c == 'T') c = '3', chainlen = 1;
-                        if (c == 'S') c = '1', chainlen = 2;
-                        if (c == 'C') c = '2', chainlen = 2;
-                        if (c == 'B') c = '3', chainlen = 2;
+                        if (c == 'P') /*c = '2',*/ chainlen = 1; // Reentrance ?? 29/04/21
+                        if (c == 'M') /*c = '1',*/ chainlen = 1;
+//		        if (c == 'Y') /*c = '2',*/ chainlen = 1;
+//			if (c == 'Z') /*c = '1',*/ chainlen = 1;
+                        if (c == 'T') /*c = '3',*/ chainlen = 1;
+                        if (c == 'S') /*c = '1',*/ chainlen = 2;
+                        if (c == 'C') /*c = '2',*/ chainlen = 2;
+                        if (c == 'B') /*c = '3',*/ chainlen = 2;
 
 
 // Process each line in the newpgen output file
@@ -15393,20 +15371,20 @@ OPENFILE :
                             nn--;
                         }
                         for (i = 0; i < chainlen; i++) {
-                            if (c == '1' || c == '3') {
+                            if (c == '1' || c == '3' || c == 'M' || c == 'S' || c == 'T' || c == 'B') {
                                 if (! process_num (format, sgk, sgb, n - nfudge + i, -1, shift, &res))
                                     goto done;
                                 if (!res)
                                     break;
-                                if (c == '1')
+                                if (c == '1' || c == 'M' || c == 'S')
                                     format = NPGCC1;
                             }
-                            if (c == '2' || c == '3') {
+                            if (c == '2' || c == '3' || c == 'P' || c == 'C' || c == 'T' || c == 'B') {
                                 if (! process_num (format, sgk, sgb, n - nfudge + i, +1, shift, &res))
                                     goto done;
                                 if (!res)
                                     break;
-                                if (c == '2')
+                                if (c == '2' || c == 'P' || c == 'C')
                                     format = NPGCC2;
                             }
                             if (c == 'J') {	// Twin/SG
@@ -15536,9 +15514,9 @@ OPENFILE :
                         nn = n;
 //			if (c == '1' || c == '2' || c == '3')
 //			   nn--;
-                        if (c == 'S')
+                        if (c == 'S' && !(mask & MODE_PLUS))    // 30/04/21
                             chainlen = 2;
-                        if (c == 'C')
+                        if (c == 'C' && !(mask & MODE_PLUS))   // 01/05/21
                             chainlen = 2;
                         if (c == 'B')
                             chainlen = 2;
@@ -16445,6 +16423,9 @@ OPENFILE :
                 }
             }	// End processing a data line
 
+            IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
+            recovering = FALSE; // 21/04/21
+            
             if ((!rising_ns && !rising_ks) || (rising_ns && rising_ks))
                 IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);		// Point on the next line
             if (rising_ns && !rising_ks) {
@@ -16498,19 +16479,22 @@ OPENFILE :
         }       // End of loop on input lines
         IniWriteString (INI_FILE, (char*)"ResultLine", NULL);
                 // delete the result line
-        _unlink (SVINI_FILE);								// delete the backup of INI_FILE
+        _unlink (SVINI_FILE);					// delete the backup of INI_FILE
         completed = TRUE;
 done:
+        IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
+        recovering = FALSE; // 21/04/21
+        
         if(IniGetInt(INI_FILE, (char*)"StopOnSuccess", 0) && res) {
             if ((!rising_ns && !rising_ks) || (rising_ns && rising_ks))
-                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);		// Point on the next line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);	// Point on the next line
             if (rising_ns && !rising_ks)
-                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);		// Point on the next n
+                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);	// Point on the next n
             if (rising_ks && !rising_ns)
                 IniWriteString (INI_FILE, (char*)"Last_Processed_k", sgk);   // Point on the next k
         }
         else if (!aborted && ((!rising_ns && !rising_ks) || (rising_ns && rising_ks)))
-            IniWriteInt (INI_FILE, (char*)"PgenLine", line);		            // Point again on the current line...
+            IniWriteInt (INI_FILE, (char*)"PgenLine", line);	// Point again on the current line...
         IniWriteString (INI_FILE, (char*)"MaxRoundOff", NULL);
         if (facto) {
             sprintf (outbuf, "%lu candidates factored, %lu factors found, %lu remaining\n", factored, eliminated, factored - eliminated);

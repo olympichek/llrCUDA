@@ -318,4 +318,11 @@ void 		mulg(giant a, giant b);
 /* A giant gcd.  Modifies its arguments. */
 void		ggcd(giant xx, giant yy);
 
+/* Conversion to/from GMP mpz_t data type.  Caller responsible for calling mpz_init and mpz_clear. */
+/* Also responsible for allocating the giant with appropriate size. */
+
+#define gtompz(g,m)	mpz_import (m, (g)->sign, -1, sizeof ((g)->n[0]), 0, 0, (g)->n)
+#define mpztog(m,g)	{size_t	count; mpz_export ((g)->n, &count, -1, sizeof ((g)->n[0]), 0, 0, m); (g)->sign = (int) count;}
+
+
 #endif

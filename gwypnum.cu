@@ -430,15 +430,11 @@ int gwyptogiantnomodulo (
         pushg (2);
     }
 /* Since all gwnums are premultiplied by the inverse of k, we must now multiply by k to get the true result. */
-    if (kg > 1.0) {
+    if (kg != 1.0) {
         giant	newg;
         newg = newgiant ((unsigned long) (bit_length / 16) + 64);
-        if (kg < 2147483647.0)
-            itog ((int)kg, newg);
-        else
-            gtog (gk, newg);
+        gtog (gk, newg);
         mulg (v, newg);
-//        modg (gmodulus, newg);
         gtog (newg, v);
         gwypfree (newg);
     }
@@ -1298,7 +1294,7 @@ __global__ void cuda_inormalize_kernel(
     double  SMALLMULCONST,
     int     addinindex,
     double  addinvalue,
-    int     plus
+    int     cg      // 25/03/21
 )
 {
     register int    j;
@@ -1366,7 +1362,7 @@ __global__ void cuda_inormalize2_kernel(
     double  SMALLMULCONST,
     int     addinindex,
     double  addinvalue,
-    int     plus
+    int     cg      // 24/03/21
 )
 {
     register int    j;
@@ -1381,8 +1377,9 @@ __global__ void cuda_inormalize2_kernel(
             j = 0;
             if (wrapindex)
                 carry2 = carry*wrapfactor;
-            if (plus) 
-                carry = -carry;
+//            if (plus) 
+//                carry = -carry;
+            carry *= -cg;    // accept abs(c)!=1 here! 24/03/21
             while (carry||carry2)   {       
                 if (wrapindex && !carry)
                 // Skip already normalized words
@@ -1402,8 +1399,9 @@ __global__ void cuda_inormalize2_kernel(
                     j = 0;
                     if (wrapindex)
                         carry2 = carry*wrapfactor;
-                    if (plus)		
-                        carry = -carry;
+//                    if (plus)		
+//                        carry = -carry;
+                    carry *= -cg;    // accept abs(c)!=1 here! 24/03/21
                 }
             }
         }
@@ -1467,8 +1465,9 @@ inormalize(  // Used for irrational bases DWFFT
         px = x;
         if (wrapindex)
             carry2 = carry*wrapfactor;
-        if (plus)
-            carry = -carry;
+//        if (plus)
+//            carry = -carry;
+        carry *= -cg;    // accept abs(c)!=1 here! 24/03/21
         while (carry||carry2)   {
             if (wrapindex && !carry) {
                 // Skip already normalized words
@@ -1491,8 +1490,9 @@ inormalize(  // Used for irrational bases DWFFT
                 px = x;
                 if (wrapindex)
                     carry2 = carry*wrapfactor;
-                if (plus)
-                    carry = -carry;
+//                if (plus)
+//                    carry = -carry;
+                carry *= -cg;    // accept abs(c)!=1 here! 24/03/21
             }
         }
     }
@@ -1520,7 +1520,7 @@ __global__ void cuda_rnormalize_kernel(
     double  SMALLMULCONST,
     int     addinindex,
     double  addinvalue,
-    int     plus
+    int     cg      // 25/03/21
 )
 {
     register int    j;
@@ -1587,7 +1587,7 @@ __global__ void cuda_rnormalize2_kernel(
     double  SMALLMULCONST,
     int     addinindex,
     double  addinvalue,
-    int     plus
+    int     cg      // 25/03/21
 )
 {
     register int    	j;
@@ -1599,8 +1599,9 @@ __global__ void cuda_rnormalize2_kernel(
         carry = g_carry[threadID];
         if (carry)  {
             j = 0;
-            if (plus) 
-                carry = -carry;
+//            if (plus) 
+//                carry = -carry;
+            carry *= -cg;    // accept abs(c)!=1 here! 25/03/21
             while (carry)   {       
                 tx = x[IDX(j)];
                 xx = tx + carry;
@@ -1611,7 +1612,8 @@ __global__ void cuda_rnormalize2_kernel(
                 // And the balanced remainder in current word
                 if (++j == N)   {
                     j = 0;
-                    if (plus)				   carry = -carry;
+//                    if (plus)				   carry = -carry;
+                    carry *= -cg;    // accept abs(c)!=1 here! 25/03/21
                 }
             }
         }
@@ -1674,8 +1676,9 @@ rnormalize( // Used for rational bases DWFFT
     if (carry)  {
         j = 0;
         px = x;
-        if (plus)
-            carry = -carry;
+//        if (plus)
+//            carry = -carry;
+        carry *= -cg;    // accept abs(c)!=1 here! 25/03/21
         while (carry)   {
             xx = *px + carry;
             zz = (xx+limitbv)-limitbv;
@@ -1686,8 +1689,9 @@ rnormalize( // Used for rational bases DWFFT
             if (++j == N)   {
                 j = 0;
                 px = x;
-                if (plus)
-                    carry = -carry;
+//                if (plus)
+//                    carry = -carry;
+                carry *= -cg;    // accept abs(c)!=1 here! 25/03/21
             }
         }
     }
@@ -2011,8 +2015,8 @@ cuda_lucas_square(
             cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_x,cuda_cxin,(double)ttmp,hn);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_x[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);    // 25/03/21
+            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);   // 25/03/21
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
             if (error_log) {
@@ -2044,8 +2048,8 @@ cuda_lucas_square(
             cuda_fftwsquare_g(N);   // DWT squaring
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_xin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                     transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
             if (error_log)  {
@@ -2083,8 +2087,8 @@ cuda_lucas_square(
             cuda_mul_two_to_minusphi_kernel<<<(hn+127)/128,128>>>(cuda_x,cuda_cxin,cuda_two_to_minusphi,hn);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_x[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         	if (error_log)
@@ -2111,8 +2115,8 @@ cuda_lucas_square(
         cuda_fftwsquare_g(N);	// DWT squaring
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_0_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_xin[j],(double *)&cuda_two_to_minusphi[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2163,8 +2167,8 @@ cuda_lucas_square_generic(
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_x,cuda_cxin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_x[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2180,8 +2184,8 @@ cuda_lucas_square_generic(
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_tmp_g,cuda_cyin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_tmp_g[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2197,8 +2201,8 @@ cuda_lucas_square_generic(
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_tmp_g,cuda_cyin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_tmp_g[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2223,8 +2227,8 @@ cuda_lucas_square_generic(
         cuda_fftwsquare_g(N);	// DWT squaring
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_xin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_x[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2238,8 +2242,8 @@ cuda_lucas_square_generic(
         cuda_fftwmulbyr_g(N);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_yin[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2253,8 +2257,8 @@ cuda_lucas_square_generic(
         cuda_fftwmulbym_g(N);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2386,8 +2390,8 @@ cuda_lucas_mul(	// Multiplication of large integers ; inputs and output normaliz
             cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_y,cuda_cyin,(double)ttmp,hn);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_y[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
             cuda_check_balanced_kernel <<<(N+128-1)/128,128>>>(cuda_y, g_hlimit, N, &balerr);
@@ -2418,8 +2422,8 @@ cuda_lucas_mul(	// Multiplication of large integers ; inputs and output normaliz
             cuda_fftwmul_g(N);// DWT multiplication
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
             if (error_log)    {
@@ -2457,8 +2461,8 @@ cuda_lucas_mul(	// Multiplication of large integers ; inputs and output normaliz
             cuda_mul_two_to_minusphi_kernel<<<(hn+127)/128,128>>>(cuda_y,cuda_cyin,cuda_two_to_minusphi,hn);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_y[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
             if (error_log) {
@@ -2487,8 +2491,9 @@ cuda_lucas_mul(	// Multiplication of large integers ; inputs and output normaliz
             cuda_fftwmul_g(N);// DWT multiplication
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 mul_0_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double *)&cuda_two_to_minusphi[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+            cuda_inormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+            cuda_inormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,g_limitbv,g_limitbv,g_invlimit,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,wrapindex,wrapfactor,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg
+);
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
                 transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
             if (error_log)    {
@@ -2498,8 +2503,6 @@ cuda_lucas_mul(	// Multiplication of large integers ; inputs and output normaliz
                         err=l_err[j];
                 cuda_check_balanced_kernel <<<(N+128-1)/128,128>>>(cuda_y, g_hlimit, N, &balerr);
             }
-            if (balerr)
-                gwyptrace (69);
             if(/*!error_log && */flag&2)
                 cutilSafeCall(cudaMemcpy(y,cuda_y,sizeof(double)*N,cudaMemcpyDeviceToHost));
             for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
@@ -2543,8 +2546,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_y,cuda_cyin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_y[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         cuda_gwypcopyzero_kernel<<<(N+127)/128,128>>>(cuda_y, cuda_tmp_g, zerowordslow, FFTLEN);
@@ -2553,8 +2556,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_tmp_g,cuda_cyin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_tmp_g[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log) {
@@ -2570,8 +2573,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_unfold_kernel<<<(hn+127)/128,128>>>(cuda_tmp_g,cuda_cyin,(double)ttmp,hn);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_tmp_g[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int)  STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2597,8 +2600,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_fftwmul_g(N);  // DWT multiplication
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, noadd, nomul,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_y[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log)  {
@@ -2612,8 +2615,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_fftwmulbyr_g(N);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_yin[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log){
@@ -2627,8 +2630,8 @@ cuda_lucas_mul_generic(	// Multiplication of large integers ; inputs and output 
         cuda_fftwmulbym_g(N);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             mul_const_transpose<<<grid, threads>>>((double *)&cuda_tmp[j],(double *)&cuda_yin[j],(double)ttmp,(int)  STRIDE_DIM,(int) STRIDE_DIM);
-        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
-        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,plus);
+        cuda_rnormalize_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
+        cuda_rnormalize2_kernel<<<(N+STRIDE*128-1)/STRIDE/128,128>>>(cuda_tmp, N, error_log, 1, 1,limit_high_bigval,limit_high_bigval,limit_inverse_high,STRIDE,BIGVAL2,BIGVAL2,g_carry,g_err,MULBYCONST,SMALLMULCONST,addinindex,addinvalue,cg);
         for(j=0;j<N;j+=(STRIDE_DIM*STRIDE_DIM))
             transpose<<<grid, threads>>>((double *)&cuda_tmp_g[j],(double *)&cuda_tmp[j],(int) STRIDE_DIM,(int) STRIDE_DIM);
         if (error_log){
@@ -2659,7 +2662,6 @@ lucas_mul(	// Multiplication of large integers ; inputs and output normalized
 {
     register int    j, hn = N/2;
     register double err;
-
     if (tdebug)
         gwypstart_timer (5);
     if (zp || generic)
@@ -2759,7 +2761,9 @@ int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
     len = bitlen (gmodulus);
     rdwt = len;     // Exponent for DWT mode
     rzpad = len + len + 32;
-    // Exponents for zero padded and generic modes
+    
+// Exponents for zero padded and generic modes
+    
     rgeneric = rzpad + 2*EB;
     
 // Compute the fftlength for each mode
@@ -2837,6 +2841,8 @@ next2:
     incfft = FFTINC;
     while ((/*max_exp = */gwtable[i].max_exp) != 0) {
         fftdwt = gwtable[i].fftlen;
+        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+        tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
         if (fftdwt < STRIDE_DIM*2)
             goto next3;
         else if ((double) n * log2b / (double) fftdwt > 26.0)
@@ -2845,6 +2851,8 @@ next2:
             goto next3;
             // Top carry adjust can only handle k values of 34 bits or less.        
         else if (log2k >= 34.0)
+            goto next3;
+        else if (tbpw > MAXBITSPERDOUBLE)   // 29/03/21
             goto next3;
         else {
             if (incfft) {
@@ -2859,17 +2867,12 @@ next3:
     }            
     incfft = FFTINC;
     fftwincr = fftdwt / 16;
-    while (1) {// Compute IBDWT FFT length (fine)
-        bpw = RINT((rdwt+fftdwt-1)/fftdwt);
-        tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
-        if (tbpw <= MAXBITSPERDOUBLE || bpw < 4.0)
-            break;
-        else
-            fftdwt += fftwincr;
-    }
+    bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+    tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
     while (incfft-- > 0)
         fftdwt += (fftwincr);
-    
+    if (!generic && !zpad && (tbpw > MAXBITSPERDOUBLE))     // IBDWT impossible... 27/03/21
+        generic = 1;
     if (generic) {
         zpad = 0;
         FFTLEN = fftgeneric;
@@ -3143,12 +3146,12 @@ gwypsetup(
     double          k,	// The multiplier
     unsigned long   b,	// The base (force generic reduction if not two)
     unsigned long   n,	// The exponent
-    signed long     c,	// c, in k*b^n+c (force generic reduction if not +1 or -1)
+    signed long     c,	// c, in k*b^n+c
     giant           modulus_arg	// The modulus of the modular reduction
 )
 {
-    long    j, len, g /*limit*/;
-    double  dlimit;
+    long    j, len/*, g /*limit*/;
+    double  dlimit, min_hlimit = 0.0, max_hlimit = 0.0;
     double  log2k, log2b;
     double  tc1 = 12345.6789, tc2 = 6789.12345;
 
@@ -3158,9 +3161,9 @@ gwypsetup(
     } 	
     printfunction = (verbose)? both_output : screen_output;
     dd_data_arg = gwdbldbl_data_alloc ();
-    gmodulus = modulus_arg;
-    if (abs(c) != 1)
-        generic = 1;
+    gmodulus = modulus_arg;    
+//    if (abs(c) != 1)
+//        generic = 1;
     log2b = log2(b);
     if (k > 0.0) {
         log2k = log2(k);
@@ -3195,13 +3198,14 @@ gwypsetup(
     GWP_RANDOM=NULL;
     gwyptmp=NULL;   // JP 27/11/18
     zp = set_fftlen(k, b, n, c);
-    if(FFTLEN < 128 && ((k!=1) || (b!=4) || (c!=1)))
+    if(FFTLEN < 128 && ((k!=1) || (b!=4) || (c!=1))) {
         return(1);  // Make only an APRCL test...
+    }
     k = kg;
     b = bg;
     n = ng;
     c = cg;
-    compl2 = (c == 1)? 1 : 0;
+    compl2 = (c >= 1)? 1 : 0;   // 23/03/21
     plus = compl2;
     NUM_B_PER_SMALL_WORD = (unsigned long) avg_num_b_per_word;
     if (generic) {
@@ -3266,21 +3270,25 @@ gwypsetup(
     }	
     wrapindex = 0;
     wrapfactor = 1.0;
-    g = 1;        
+//    wrapfactor = (double)abs(c); // 18/03/21
     if (k != 1.0) {
-        g = (1<<(int)ceil(log2k))-(int)k;
-        wrapfactor = intpow((double)b, (double)ceil(logb(k)))-k;
+        wrapfactor = (double)intpow((double)b, (double)ceil(logb(k)))-k;
+//    if (k != 1.0 || abs(c) != 1)    {
         while (n > gwfft_base(dd_data_arg, wrapindex))
             wrapindex++;
         wrapindex--;
         for (j=0;j+gwfft_base(dd_data_arg, wrapindex)<n;j++)
-            wrapfactor *= (double)b;
+//            wrapfactor *= (double)b;
+            wrapfactor = wrapfactor * (double)b;  // 03/04/21 RINT ??
     }	
+/*        sprintf (gwypbuf, "wrapindex = %d, wrapfactor = %f\n", wrapindex, wrapfactor);
+        if (printfunction != NULL)
+            (*printfunction)(gwypbuf); */
     if (debug && !zp && !generic) {
         sprintf (gwypbuf, "wrapindex = %d, wrapfactor = %f\n", wrapindex, wrapfactor);
         if (printfunction != NULL)
             (*printfunction)(gwypbuf);
-        sprintf(gwypbuf, "INIT : log2ofkbpown = %7.4f, low = %7.4f, high = %7.4f, last = %7.4f, g = %ld, B = %g\n", log2ofkbpown, low, high, last, g, BIGVAL2); // JP 08/07/17
+        sprintf(gwypbuf, "INIT : log2ofkbpown = %7.4f, low = %7.4f, high = %7.4f, last = %7.4f, B = %g\n", log2ofkbpown, low, high, last, BIGVAL2); // JP 08/07/17
         if (printfunction != NULL)
             (*printfunction)(gwypbuf);
     }	
@@ -3293,9 +3301,9 @@ gwypsetup(
             gwfft_weight_inverse_over_fftlen (dd_data_arg, j);
         }
         fftbase[j] = gwfft_base(dd_data_arg, j+1) - gwfft_base(dd_data_arg, j);
-        maxbitsinfftlen += fftbase[j];      // JP 19/09/20
-        if (maxbitsinfftword < fftbase[j])  // JP 20/09/20
-            maxbitsinfftword = fftbase[j];
+        maxbitsinfftlen += abs(fftbase[j]); // JP 19/09/20 , 04/04/21
+        if (maxbitsinfftword < fftbase[j])
+            maxbitsinfftword = fftbase[j];  // JP 20/09/20
     }
     if (!cufftonly) {
         if (!generic && !zp) {
@@ -3318,25 +3326,28 @@ gwypsetup(
     hlimit[FFTLEN-1] = 0.5*last;
     limitbv[FFTLEN-1] = last*BIGVAL2-BIGVAL2;
         
+    min_hlimit = min (low, (0.5*last));
+    max_hlimit = max (low, (0.5*last));
+    
     for(j=1; j<FFTLEN-1; ++j) {
         dlimit = (double)intpow((double)b, (double)(gwfft_base(dd_data_arg, j+1) - gwfft_base(dd_data_arg, j)));
         flimit[j] = dlimit;
         invlimit[j] = 1.0/dlimit;
         hlimit[j] = 0.5*dlimit;
         limitbv[j] = dlimit*BIGVAL2-BIGVAL2;
+        if (min_hlimit > hlimit[j])
+            min_hlimit = hlimit[j];
+        if (max_hlimit < hlimit[j])
+            max_hlimit = hlimit[j];
     }
-/*    if (generic) {
-        modulus = gwypalloc ();
-        nb_malloc++;
-        recip = gwypalloc ();
-        nb_malloc++;
-        gwyptmp = gwypalloc ();
-        nb_malloc++;
-        gianttogwyp (gmodulus, modulus);
-        gianttogwyp (grecip, recip);
-    }	*/
+    if (min_hlimit > hlimit[FFTLEN-1])
+        min_hlimit = hlimit[FFTLEN-1];
+    if (max_hlimit < hlimit[FFTLEN-1])
+        max_hlimit = hlimit[FFTLEN-1];
+
     dim3 grid(STRIDE_DIM/BLOCK_DIM,STRIDE_DIM/BLOCK_DIM, 1);
-    dim3 threads(BLOCK_DIM, BLOCK_DIM, 1);        
+    dim3 threads(BLOCK_DIM, BLOCK_DIM, 1);
+
     if (!cufftonly) {
         cutilSafeCall(cudaMemcpy(cuda_tmp,invlimit,FFTLEN*sizeof(double),cudaMemcpyHostToDevice));
         for(j=0;j<FFTLEN;j+=(STRIDE_DIM*STRIDE_DIM))
@@ -3410,7 +3421,7 @@ void setaddin (
     int     N
 )
 {
-    unsigned long word, b_in_word;
+    unsigned long word = 0, b_in_word = 0;  // must be defaulted to zero! 25/03/21
 
 //	ASSERTG (k == 1.0 || abs (c) == 1);
 
@@ -3779,7 +3790,6 @@ void gwypsquare_carefully
     double  err;
 
 /* Generate a random number, if we have't already done so */
-
     if (GWP_RANDOM == NULL) {
         GWP_RANDOM = gwypalloc ();
         gwyp_random_number (GWP_RANDOM);
@@ -3915,7 +3925,13 @@ void itogwyp(	// Set a gwypnum to a small value
 {
     int     j, saveindex;
     double  savevalue;
-
+    if (!generic && !zp && (kg != 1.0) && (abs(cg) != 1)) {  // 28/02/21
+        giant gs = newgiant (4);
+        itog (s, gs);
+        gianttogwyp (gs, d);
+        gwypfree (gs);
+        return;
+    }
     for (j=0; j<FFTLEN; j++)
     // Init the large integer to zero
         d[j] = 0.0;
@@ -4036,7 +4052,7 @@ void gianttogwyp (
 
     if (kg != 1.0) {
 /* Easy case 1 (k*b^n-1): Inverse of k is b^n */
-        if (!plus) {
+        if (cg == -1) {
             if (bg == 2) {
                 gtog (a, newg);
                 gshiftleft (ng, newg);
@@ -4047,7 +4063,7 @@ void gianttogwyp (
             }
         }
 /* Easy case 2 (k*b^n+1): Inverse of k is -b^n */
-        else {
+        else if (cg == 1) {
             gtog (gmodulus, newg);
 // make -a a positive number!
             subg (a, newg);
@@ -4059,8 +4075,12 @@ void gianttogwyp (
                 mulg (a, newg);                        
             }
         }
+        else {
+            gtog (gk, newg);
+            invg (gmodulus, newg);
+            mulg (a, newg);
+        }
         modg (gmodulus, newg);
-//        a = newg;
     }
     else
         gtog (a, newg);

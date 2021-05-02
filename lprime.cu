@@ -439,7 +439,7 @@ DIGITSONLY:
 
 		case 'V':
 		case 'v':
-			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.3 ; linked with CUDA Version 8.0.44\n");
+			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.4 ; linked with CUDA Version 8.0.44\n");
 			return (0); 
 
 /* -W - use a different working directory */
