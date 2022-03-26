@@ -63,6 +63,8 @@ int VERBOSE = 0;
 int MENUING = 0;
 int PROCESSFILE = 0;
 int SINGLETEST = 0;
+int nbllr_mallocs = 0;
+int nbllr_frees =0;
 
 //cuda int g_roundoff = 0; //cuda
 
@@ -439,7 +441,7 @@ DIGITSONLY:
 
 		case 'V':
 		case 'v':
-			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.4 ; linked with CUDA Version 8.0.44\n");
+			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.5 ; linked with CUDA Version 8.0.44\n");
 			return (0); 
 
 /* -W - use a different working directory */
@@ -752,6 +754,7 @@ ok: IniWriteInt (INI_FILE, (char*)"Pid", my_pid);
     memset (w, 0, sizeof (struct work_unit));
 
     completed = primeContinue ();
+    free (w);
     IniWriteInt (INI_FILE, (char*)"Pid", 0);
     _unlink ("$temp.npg");
     _unlink ("$temp.res");

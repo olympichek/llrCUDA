@@ -1,11 +1,14 @@
 
-		Welcome to llrCUDA program Version 3.8.4 !
+		Welcome to llrCUDA program Version 3.8.5 !
 
 
 0) What is new in this version :
 
+  In previous Version 3.8.4, one call to free() function was missing in Gerbicz
+  error checking code ; this caused an important memory leak...
+  This issue is now fixed here!
   No much new feature, but some improvements related to reliability and speed.
-  - I implemented the patch sent to me Serge Batalov, and the new ABC Format :
+  - I implemented the patch sent to me by Serge Batalov, and the new ABC Format :
   ABC DivPhi($a*$b^$c+1) may be used to do these tests.
   - By default, all tests on base two numbers use Gerbicz error checking.
   This is the case for PRP Fermat and SPRP tests as in Prime95 or Mprime,

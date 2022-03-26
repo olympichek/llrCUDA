@@ -1445,7 +1445,10 @@ int read_gwypnum (
 	long	i, len, bytes;
 
 	tmp = newgiant(FFTLEN*sizeof(double)/sizeof(short) + 16);
-	if (_read (fd, &len, sizeof (long)) != sizeof (long)) return (FALSE);
+	if (_read (fd, &len, sizeof (long)) != sizeof (long)) {
+            gwypfree (tmp);
+            return (FALSE);
+        }
 	bytes = len * sizeof (short);
 	if (_read (fd, tmp->n, bytes) != bytes) return (FALSE);
 	tmp->sign = len;
@@ -1485,7 +1488,10 @@ int write_gwypnum (
         tmp = newgiant(FFTLEN*sizeof(double)/sizeof(short) + 16);
         gwyptogiant (g, tmp);
         len = tmp->sign;
-        if (_write (fd, &len, sizeof (long)) != sizeof (long)) return (FALSE);
+        if (_write (fd, &len, sizeof (long)) != sizeof (long)) {
+            gwypfree (tmp);
+            return (FALSE);
+        }
         bytes = len * sizeof (short);
         if (_write (fd, tmp->n, bytes) != bytes) return (FALSE);
         *sum += len;
@@ -3660,8 +3666,8 @@ int setupok (int errcode, giant bignumber, char *string, int *resultat)    // Te
 			if (bigbuf != NULL) {
 				sprintf (bigbuf, "Known factors used for the test were: %s\n", w->known_factors);
 				OutputStr (bigbuf);
+                                free (bigbuf);
                         }
-                        free (bigbuf);
 		}
 	}
         nbdg = gnbdg (bignumber, 10);
@@ -3883,7 +3889,9 @@ int isexpdiv (
 /* Allocate memory */
 
     x = gwypalloc ();
+    nbllr_mallocs++;
     tmp = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+    nbllr_mallocs++;
 
 /* Optionally resume from save file and output a message */
 /* indicating we are resuming a test */
@@ -4067,7 +4075,9 @@ int isexpdiv (
             if (stopping) {
                 iaddg (1, N);// Restore the modulus
                 gwypfree (tmp);
+                nbllr_frees++;
                 gwypfree (x);
+                nbllr_frees++;
 //		gwypdone ();
                 *res = FALSE;
                 return (FALSE);
@@ -4150,7 +4160,9 @@ int isexpdiv (
     sprintf (buf, "End of divisibility test of %ld^(N-1)-1\n", a);
 
     gwypfree (tmp);
+    nbllr_frees++;
     gwypfree (x);
+    nbllr_frees++;
 
 /* Output the final timings */
 
@@ -4178,7 +4190,9 @@ error:
     iaddg (1, N);   // Restore the value of N
     Nlen = bitlen (N);
     gwypfree (tmp);
+    nbllr_frees++;
     gwypfree (x);
+    nbllr_frees++;
 //	gwypdone ();
     *res = FALSE;   // To avoid credit mesage...
 
@@ -4309,6 +4323,7 @@ int GerbiczTest (
 		tmp = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 		tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	}
+	nbllr_mallocs+=3;
 
 /* As a small optimization, base 2 numbers are computed as a^(k*2^n) or a^(k*2^(n-1)) mod N with the final result */
 /* multiplied by a^(c-1).  This eliminates tons of mul-by-consts at the expense of lots of bookkeepping headaches */
@@ -4360,12 +4375,18 @@ int GerbiczTest (
 /* Allocate memory */
 
 	ps.x = gwypalloc ();
+        nbllr_mallocs++;
 	ps.y = gwypalloc ();
-	if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK)
-		ps.alt_x = gwypalloc ();
+        nbllr_mallocs++;
+	if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
+            ps.alt_x = gwypalloc ();
+            nbllr_mallocs++;
+        }
 	if (ps.error_check_type == ERRCHK_GERBICZ) {
-		ps.u0 = gwypalloc ();
-		ps.d = gwypalloc ();
+            ps.u0 = gwypalloc ();
+            nbllr_mallocs++;
+            ps.d = gwypalloc ();
+            nbllr_mallocs++;
 	}
 
 /* Set the proper starting value and state if no save file was present */
@@ -4375,6 +4396,7 @@ int GerbiczTest (
                 tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
             else
                 tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+            nbllr_mallocs++;
             itog (ps.prp_base, tmp3);
             /* For base==2 numbers, k==1 and abs(c)==1 we support FFT data shifting */
             if (w->b==2 && (w->k==1.0) && (abs(w->c)==1) && w->n>1000 && IniGetInt
@@ -4393,6 +4415,7 @@ int GerbiczTest (
             }
             gianttogwyp (tmp3, ps.x);
             free (tmp3);
+            nbllr_frees++;
             gwypcopy (ps.x, ps.y);	// temporary...
             ps.units_bit2 = 0;
 
@@ -5166,6 +5189,16 @@ int GerbiczTest (
 					string_rep, ps.counter, (int) PRECISION, trunc_percent (100.0*w->pct_complete));
 			clearline(100);
 			OutputStr (buf);
+                        if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
+                            gwypfree (ps.alt_x);
+                            nbllr_frees++;
+                        }
+                        if (ps.error_check_type == ERRCHK_GERBICZ) {
+                            gwypfree(ps.u0);
+                            nbllr_frees++;
+                            gwypfree(ps.d);
+                            nbllr_frees++;
+                        }
 			goto exit;
 		}
 
@@ -5176,8 +5209,10 @@ int GerbiczTest (
                             tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
                         else
                             tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+                        nbllr_mallocs++;
 			if (gwyptogiant (x, tmp3)) {
 				free (tmp3);
+                                nbllr_frees++;
 				OutputBoth (ERRMSG80);
 				inc_error_count (2, &ps.error_count);
 				last_counter = ps.counter;		/* create save files before and after this iteration */
@@ -5204,6 +5239,7 @@ int GerbiczTest (
 					ps.counter - interim_counter_off_one);
 			OutputBoth (buf);
                         free (tmp3);
+                        nbllr_frees++;
 		}
 
 /* Write a save file every INTERIM_FILES iterations. */
@@ -5224,7 +5260,9 @@ int GerbiczTest (
 	if (ps.error_check_type == ERRCHK_GERBICZ) {
             IniWriteFloat (INI_FILE, "PRPGerbiczCompareIntervalAdj", 1.0);
             gwypfree (ps.u0);
+            nbllr_frees++;
             gwypfree (ps.d);
+            nbllr_frees++;
         }
 
         
@@ -5319,6 +5357,7 @@ int GerbiczTest (
 		}
 		
 		gwypfree (ps.alt_x);
+                nbllr_frees++;
 	}
 
 	if (ps.residue_type == GMN_TYPE) {
@@ -5337,7 +5376,9 @@ int GerbiczTest (
 		ps.gy = tmp2;
 
 		gwypfree (ps.x);
+                nbllr_frees++;
 		gwypfree (ps.y);
+                nbllr_frees++;
                  
 	/* Delete the continuation files. */
 
@@ -5401,9 +5442,15 @@ int GerbiczTest (
 		clearline (100);
 
 		free (tmp);
+                nbllr_frees++;
 		free (tmp2);
+                nbllr_frees++;
 		gwypfree (ps.x);
+                nbllr_frees++;
 		gwypfree (ps.y);
+                nbllr_frees++;
+                free (exp);
+                nbllr_frees++;
 
 
 #if defined(WIN32) && !defined(_CONSOLE)
@@ -5481,18 +5528,28 @@ restart:
         }
         
 	free (tmp);
+        nbllr_frees++;
 	free (tmp2);
+        nbllr_frees++;
 	gwypfree (ps.x);
+        nbllr_frees++;
 	gwypfree (ps.y);
+        nbllr_frees++;
 	free (exp);
+        nbllr_frees++;
 	return (-1);;
 
 exit:
 	free (tmp);
+        nbllr_frees++;
 	free (tmp2);
+        nbllr_frees++;
 	gwypfree (ps.x);
+        nbllr_frees++;
 	gwypfree (ps.y);
+        nbllr_frees++;
 	free (exp);
+        nbllr_frees++;
 //        gwypdone();
 	*res = FALSE;		// To avoid credit message !
 	return (FALSE);
@@ -6631,8 +6688,8 @@ int commonPRP (
             if (bigbuf != NULL) {
                 sprintf (bigbuf, "Known factors used for PRP test were: %s\n", w->known_factors);
                 OutputStr (bigbuf);
+                free (bigbuf);
             }
-            free (bigbuf);
         }
 
 /* Print results.  Do not change the format of this line as Jim Fougeron of */
@@ -7783,7 +7840,7 @@ int fastIsFrobeniusPRP (
                     sqrtabs_d = (int)floor(sqrt((double)abs_d));
                     D = sign2*abs_d;
                     Q = (1-D)/4;
-                    if ((abs (Q) == 1) || ((globalk == 1.0) && ispower((unsigned long)abs (Q), globalb)) || (sqrtabs_d * sqrtabs_d == abs_d))
+                    if ((Q == 1) || ((globalk == 1.0) && ispower(Q, globalb)) || (sqrtabs_d * sqrtabs_d == abs_d)) // abs(Q) was useless here... JP 25/03/22
                         continue;	// Avoid abs(Q) == 1 , k == 1 and abs(Q) power of b, or D perfect square...
                     else
                         break;
@@ -7860,7 +7917,7 @@ int slowIsFrobeniusPRP (
 				sqrtabs_d = (int)floor(sqrt((double)abs_d));
 				D = sign2*abs_d;
 				Q = (1-D)/4;
-				if ((abs (Q) == 1) || ((globalk == 1.0) && ispower((unsigned long)abs (Q), globalb)) || (sqrtabs_d * sqrtabs_d == abs_d))
+				if ((Q == 1) || ((globalk == 1.0) && ispower(Q, globalb)) || (sqrtabs_d * sqrtabs_d == abs_d)) // abs(Q) was useless here... JP 25/03/22
 					continue;		// Avoid abs(Q) == 1 , k == 1 and abs(Q) power of b, or D perfect square...
 				else
 					break;
@@ -12672,7 +12729,8 @@ int isLLRP (
 		if ((format == ABCDN) || (format == ABCDNG)) {	// Compute gk = gb^(n-m)-1
 			gksize = ndiff*(unsigned long)ceil(log ((double)binput)/log (2.0))+idk;// initial gksize
 			gk = newgiant ((gksize >> 2) + 8);		// Allocate space for gk
-			itog (binput, gk);
+                        nbllr_mallocs++;
+                        itog (binput, gk);
 			power (gk, ndiff);
 			iaddg (-1, gk);
 			sprintf (str, "%lu^%lu-%lu^%lu-1", binput, ninput+ndiff, binput, ninput);
@@ -12680,6 +12738,7 @@ int isLLRP (
 		else {
 			gksize = 8*strlen(sgk) + idk;		// J. P. Initial gksize
 			gk = newgiant ((gksize >> 2) + 8);	// Allocate space for gk
+                        nbllr_mallocs++;
 			ctog (sgk, gk);				// Convert k string to giant
 		}
 		klen = bitlen(gk);	// Bit length ok initial k multiplier
@@ -12699,10 +12758,12 @@ int isLLRP (
 // Lei
 		if (b_else != 1) {				// Compute the big multiplier
 			gk1 = newgiant ((gksize>>2) + 8);
+                        nbllr_mallocs++;
 			itog (b_else, gk1);	
 			power (gk1, ninput);
 			mulg (gk1, gk);
 			gwypfree (gk1);
+                        nbllr_frees++;
                 }
 // Lei end
 		if (shift > 0) {
@@ -12731,6 +12792,7 @@ int isLLRP (
 	}
 	else {
 		gk = newgiant ((n>>4)+8);
+                nbllr_mallocs++;
 		itog (1, gk);					// Compute k multiplier
 		gshiftleft (n-2, gk);				// Warning : here, n is exponent+1 !
 		if (format == ABCK) {
@@ -12747,6 +12809,7 @@ int isLLRP (
 	bits = n + klen;			// Bit length of N
 	N =  newgiant ((bits >> 2) + 8);	// Allocate memory for N
 //	N =  newgiant ((bits>>3) + 8);	        // Allocate memory for N incr 11/11/20
+        nbllr_mallocs++;
 
 
 //	Compute the number we are testing.
@@ -12772,7 +12835,9 @@ int isLLRP (
 		retval = isPRPinternal (str, dk, binput, ninput, -1, res);
 
 		gwypfree(gk);
+                nbllr_frees++;
 		gwypfree(N);
+                nbllr_frees++;
 //                recovering = FALSE;       // 20/04/21
 		return retval;
 	}
@@ -12794,7 +12859,9 @@ int isLLRP (
 
 		if (!*res) {
 			gwypfree(gk);
+                        nbllr_frees++;
 			gwypfree(N);
+                        nbllr_frees++;
 //                        recovering = FALSE;       // 20/04/21
 			return retval;
 		}
@@ -12824,22 +12891,29 @@ restart:
             if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
 //                gwypdone ();
                 gwypfree(gk);
+                nbllr_frees++;
                 gwypfree(N);
+                nbllr_frees++;
 //	        *res = FALSE;
                 return TRUE;
             }
         }	// end dk == 0.0
 	else if (!setupok (gwypsetup (dk, binput, ninput, -1, N), N, str, res)) { 
 		gwypfree(gk);
+                nbllr_frees++;
 		gwypfree(N);
+                nbllr_frees++;
 //		*res = FALSE;
                 return TRUE;
 	}
 		
 	x = gwypalloc (); 
+        nbllr_mallocs++;
 	y = gwypalloc ();
+        nbllr_mallocs++;
  
 	tmp =  newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16); 
+        nbllr_mallocs++;
         
 	last = n-1;
 
@@ -12880,10 +12954,15 @@ restart:
 				sprintf (buf, "The Mersenne number %s is not prime because %lu is not prime.\n", str, n); 
 				OutputBoth (buf); 
 				gwypfree (tmp);
+                                nbllr_frees++;
 				gwypfree(gk);
+                                nbllr_frees++;
 				gwypfree(N);
+                                nbllr_frees++;
 				gwypfree (x); 
+                                nbllr_frees++;
 				gwypfree (y);
+                                nbllr_frees++;
 				gwypdone();
 				*res = FALSE;
 				gwypend_timer (1); 
@@ -12920,10 +12999,15 @@ restart:
 				sprintf (buf, "%s has a small factor : %d !!\n", str, abs(v1));
 			OutputBoth (buf); 
 			gwypfree (tmp);
+                        nbllr_frees++;
 			gwypfree(gk);
+                        nbllr_frees++;
 			gwypfree(N);
+                        nbllr_frees++;
 			gwypfree (x); 
+                        nbllr_frees++;
 			gwypfree (y);
+                        nbllr_frees++;
 			gwypdone();
 			*res = FALSE;
 			gwypend_timer (1); 
@@ -12980,16 +13064,21 @@ restart:
 				OutputStr(buf);
 			}
 			if (setuponly) {
-				stopping = stopCheck (); 
-				gwypfree (tmp);
-				gwypfree(gk);
-				gwypfree(N);
-				gwypfree (x); 
-				gwypfree (y);
-				gwypdone();
-				*res = FALSE;
-				gwypend_timer (1); 
-				return(!stopping);
+                            stopping = stopCheck (); 
+                            gwypfree (tmp);
+                            nbllr_frees++;
+                            gwypfree(gk);
+                            nbllr_frees++;
+                            gwypfree(N);
+                            nbllr_frees++;
+                            gwypfree (x); 
+                            nbllr_frees++;
+                            gwypfree (y);
+                            nbllr_frees++;
+                            gwypdone();
+                            *res = FALSE;
+                            gwypend_timer (1); 
+                            return(!stopping);
 			}
 			sprintf (buf, "V1 = %d ; Computing U0...", v1);
 			OutputStr (buf); 
@@ -13171,13 +13260,18 @@ restart:
 /* If an escape key was hit, write out the results and return */ 
  
 				if (stopping) {
-					gwypfree (tmp);
-					gwypfree(gk);
-					gwypfree(N);
-					gwypfree (x); 
-					gwypfree (y);
-					gwypdone();
-					return (FALSE); 
+                                    gwypfree (tmp);
+                                    nbllr_frees++;
+                                    gwypfree(gk);
+                                    nbllr_frees++;
+                                    gwypfree(N);
+                                    nbllr_frees++;
+                                    gwypfree (x); 
+                                    nbllr_frees++;
+                                    gwypfree (y);
+                                    nbllr_frees++;
+                                    gwypdone();
+                                    return (FALSE); 
 				}
 			} 
 	    }
@@ -13328,13 +13422,18 @@ MERSENNE:
 /* If an escape key was hit, write out the results and return */ 
  
 			if (stopping) {
-				gwypfree (tmp);
-				gwypfree(gk);
-				gwypfree(N);
-				gwypfree (x); 
-				gwypfree (y);
-				gwypdone();
-				return (FALSE); 
+                            gwypfree (tmp);
+                            nbllr_frees++;
+                            gwypfree(gk);
+                            nbllr_frees++;
+                            gwypfree(N);
+                            nbllr_frees++;
+                            gwypfree (x); 
+                            nbllr_frees++;
+                            gwypfree (y);
+                            nbllr_frees++;
+                            gwypdone();
+                            return (FALSE); 
 			}
 		} 
 
@@ -13422,8 +13521,11 @@ MERSENNE:
             OutputBoth (buf); 
             prp_res = FALSE;
             gwypfree (tmp);
+            nbllr_frees++;
             gwypfree (x); 
+            nbllr_frees++;
             gwypfree (y); 
+            nbllr_frees++;
             gwypdone (); 
             IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc = IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1);
             cufftonly = TRUE;
@@ -13432,10 +13534,15 @@ MERSENNE:
             goto restart;
         }
 	gwypfree (tmp);
+        nbllr_frees++;
 	gwypfree(gk);
+        nbllr_frees++;
 	gwypfree(N);
+        nbllr_frees++;
 	gwypfree (x); 
+        nbllr_frees++;
 	gwypfree (y);
+        nbllr_frees++;
 	gwypdone (); 
 	filename[0] = 'z';
 	_unlink (filename); 
@@ -13449,8 +13556,11 @@ MERSENNE:
 
 error:
 	gwypfree (tmp);
+        nbllr_frees++;
 	gwypfree (x); 
+        nbllr_frees++;
 	gwypfree (y); 
+        nbllr_frees++;
 	gwypdone (); 
 	*res = FALSE;
 
@@ -13459,7 +13569,9 @@ error:
 		sprintf (buf, ERRMSG5, checknumber, str);
 		OutputBoth (buf);
 		gwypfree(gk);
+                nbllr_frees++;
 		gwypfree(N);
+                nbllr_frees++;
 		filename[0] = 'u';
 		_unlink (filename);
 		filename[0] = 'z';
@@ -13514,6 +13626,8 @@ int isLLRW (
 
 	gksize = strlen(sgk);
 	gk = newgiant ((gksize>>1) + 8);	// Allocate one byte per decimal digit + spares
+        nbllr_mallocs++;
+
 	ctog (sgk, gk);				// Convert k string to giant
 
 	if (shift > 0) {
@@ -13527,6 +13641,7 @@ int isLLRW (
 
 	bits = n + bitlen(gk);				// Bit length of N
 	N =  newgiant ((bits>>3) + 8);		// Allocate memory for N
+        nbllr_mallocs++;
 
 //	Compute the number we are testing.
 
@@ -13536,7 +13651,9 @@ int isLLRW (
 	iaddg (-1, N);
 	retval = slowIsWieferich (str, res);
 	gwypfree (gk);
+        nbllr_frees++;
 	gwypfree (N);
+        nbllr_frees++;
 	return retval;
 } 
 
@@ -14881,7 +14998,9 @@ int process_num (
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
                     // is the count for this k value reached ?
             *res = FALSE;   // then, skip this test
-            return TRUE;
+//            return TRUE;
+            retval = TRUE;
+            goto EXITPR;
         }
     }
     else if(mult = IniGetInt(INI_FILE, (char*)"StopOnPrimedN", 0)) {
@@ -14889,7 +15008,9 @@ int process_num (
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
                     // is the count for this n value reached ?
             *res = FALSE;   // then, skip this test
-            return TRUE;
+//            return TRUE;
+            retval = TRUE;
+            goto EXITPR;
         }
     }
     else if(mult = IniGetInt(INI_FILE, (char*)"StopOnPrimedB", 0)) {
@@ -14897,18 +15018,27 @@ int process_num (
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
                     // is the count for this base value reached ?
             *res = FALSE;   // then, skip this test
-            return TRUE;
+//            return TRUE;
+            retval = TRUE;
+            goto EXITPR;
         }
     }
 
-    if (format == ABCGM)
-        return (isGMNP (sgk, n, res));
-                // Do the primality test of a Gaussian Mersenne norm
+    if (format == ABCGM) {  // Do the primality test of a Gaussian Mersenne norm
+//        return (isGMNP (sgk, n, res));
+        retval = isGMNP (sgk, n, res);
+        goto EXITPR;
 
-    if (format == ABCSP)   // Do the PRP test of a Wagstaff number
-        return (isWSPRP (sgk, n, res));
+    }
+
+    if (format == ABCSP) {  // Do the PRP test of a Wagstaff number
+//        return (isWSPRP (sgk, n, res));
+        retval = isWSPRP (sgk, n, res);
+        goto EXITPR;
+    }
 
     gb = newgiant (strlen(sgb)/2 + 8);
+    nbllr_mallocs++;
                 // Allocate one byte per decimal digit + spares
     ctog (sgb, gb); // Convert b string to giant
     if (gb->sign <= 2) {// Test if the base is a small integer...
@@ -14944,7 +15074,10 @@ int process_num (
 // Lei mod
         if (format == ABCDP) {
             retval = IsPRP (format, sgk, base, n, incr, shift, res);
-            free (gb); return (retval);
+            free (gb);
+            nbllr_frees++;
+//            return (retval);
+            goto EXITPR;
         }
         if (((base == 2) || (superPRP == 0)) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0) && ((incr == -1) || (incr == +1)) && (format != ABCVARAQS)) {
             if (incr == -1)
@@ -14977,6 +15110,11 @@ int process_num (
 //		fermat_only = FALSE;    // JP 30/01/17
     }
     free (gb);
+    nbllr_frees++;
+EXITPR :
+    if (nbllr_mallocs!=nbllr_frees)
+        printf ("Number of LLR mallocs = %d although Number of LLR frees = %d\n", nbllr_mallocs, nbllr_frees);
+    nbllr_mallocs = nbllr_frees = 0;
     return (retval);
 }
 
@@ -16422,6 +16560,9 @@ OPENFILE :
                     }
                 }
             }	// End processing a data line
+            
+//            if (nbllr_mallocs!=nbllr_frees)
+//                printf ("Number of LLR mallocs = %d although Number of LLR frees = %d\n", nbllr_mallocs, nbllr_frees);
 
             IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
             recovering = FALSE; // 21/04/21
@@ -16482,6 +16623,8 @@ OPENFILE :
         _unlink (SVINI_FILE);					// delete the backup of INI_FILE
         completed = TRUE;
 done:
+//        if (nbllr_mallocs!=nbllr_frees)
+//            printf ("Number of LLR mallocs = %d although Number of LLR frees = %d\n", nbllr_mallocs, nbllr_frees);
         IniWriteString(INI_FILE, (char*)"FFT_Increment", NULL);
         recovering = FALSE; // 21/04/21
         

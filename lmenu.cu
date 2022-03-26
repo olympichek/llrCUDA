@@ -305,7 +305,7 @@ void options_preferences ()
 
 void help_about ()
 {
-	printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.4\n");
+	printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.5\n");
 	printf ("Using George Woltman's 1/k method IBDWT for k's up to 19 bits\n"); 
 	printf (" << Rational Base DWT for larger k's up to maximal double\n");
 	printf (" << Rational base DWT and generic reduction for larger k's or base != 2\n");
