@@ -192,6 +192,7 @@ char	EXTENSION[8] = {0};
 int ERRCHK = 0;
 unsigned int PRIORITY = 1;
 unsigned int CPU_AFFINITY = 99;
+unsigned int CPU_MASK = 0;
 unsigned int CPU_TYPE = 0;
 unsigned long volatile ITER_OUTPUT = 0;
 unsigned long volatile ITER_OUTPUT_RES = 99999999;
@@ -256,6 +257,7 @@ char    string_rep[80];
 char    sgd[sgkbufsize];
 char    sgb[sgkbufsize];
 char    bpfstring[sgkbufsize];
+char    cMAXBPD[10]={0};
 /*
 #ifndef X86_64
 
@@ -274,6 +276,7 @@ static double last_suminp[10] = {0.0};
 static double last_sumout[10] = {0.0};
 static double last_maxerr[10] = {0.0};
 static double maxroundoff = 0.40;
+double MAXBPD = 37.0;
 // static double fpart = 0.0;
 
 static unsigned long mask;
@@ -633,6 +636,8 @@ void nameIniFiles (
 void readIniFiles () 
 { 
     int	temp; 
+    const char *p;
+    char cpustring[100];
  
 //  getCpuInfo (); 
  
@@ -659,6 +664,19 @@ void readIniFiles ()
         1); 
     CPU_AFFINITY = (unsigned int) IniGetInt (INI_FILE,
         (char*)"Affinity", 99); 
+        if (CPU_AFFINITY!=99) {
+            CPU_MASK = 1<<CPU_AFFINITY;
+//            p = IniSectionGetNthStringRaw (INI_FILE, NULL, "Affinity", 1);
+            IniGetString (INI_FILE, (char*)"Affinity", cpustring, 100, (char*)"99");
+            p = strchr (cpustring, ',');
+            while (p != NULL) {
+                p++;
+                sscanf (p, "%d", &CPU_AFFINITY);
+                CPU_MASK |= 1<<CPU_AFFINITY;
+                p = strchr (p, ',');
+            }
+            printf ("CPU_MASK = %d\n", CPU_MASK);
+        }
     HIDE_ICON = (int) IniGetInt (INI_FILE, (char*)"HideIcon", 0); 
     TRAY_ICON = (int) IniGetInt (INI_FILE, (char*)"TrayIcon", 1); 
  
@@ -5127,6 +5145,11 @@ int GerbiczTest (
 				inc_error_count (7, &ps.error_count);
 				restart_counter = ps.start_counter;		/* rollback to this iteration */
 				sleep5 = FALSE;
+                                        if (!generic) {
+                                            MAXBPD = 35.0;
+                                            OutputBoth ((char*)"Restarting from the beginning...\n");
+                                            unlinkSaveFiles (&write_save_file_state);
+                                        }
 				goto restart;
 			}
 			if (IniGetInt (INI_FILE, (char*)"GerbiczVerbosity", 1)) {
@@ -5500,7 +5523,8 @@ int GerbiczTest (
 restart:
 	if (sleep5) 
 		OutputBoth (ERRMSG2);
-	OutputBoth (ERRMSG3);
+        if (generic)    // 25/05/22
+            OutputBoth (ERRMSG3);
 
 /* Save the incremented error count to be used in the restart rather than the error count read from a save file */
 
@@ -12701,7 +12725,7 @@ int isLLRP (
 	char	filename[20], buf[sgkbufsize+256], str[sgkbufsize+256],
 			sgk1[sgkbufsize], fft_desc[256]; 
 	long	write_time = DISK_WRITE_TIME * 60; 
-	int		echk, saving, stopping, v1, prp_res = 0; 
+	int		echk, saving, stopping, v1, prp_res = 0, fftfermat = 0; 
 	time_t	start_time, current_time; 
 	double	reallyminerr = 1.0; 
 	double	reallymaxerr = 0.0; 
@@ -12868,6 +12892,7 @@ int isLLRP (
 		IniWriteInt(INI_FILE, (char*)"PRPdone", 1);
                 prp_res = *res;
 		strcpy (str, buf);	// Lei
+                fftfermat = FFTLEN;
 	}
 
         
@@ -12906,7 +12931,7 @@ restart:
 //		*res = FALSE;
                 return TRUE;
 	}
-		
+
 	x = gwypalloc (); 
         nbllr_mallocs++;
 	y = gwypalloc ();
@@ -12914,6 +12939,11 @@ restart:
  
 	tmp =  newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16); 
         nbllr_mallocs++;
+        
+	if (fftfermat && (FFTLEN < fftfermat)) { // J.P. 22/05/22
+            will_try_larger_fft = TRUE;
+            goto error;
+        }
         
 	last = n-1;
 
@@ -13590,8 +13620,9 @@ error:
 
 /* Output a message saying we are restarting */ 
  
-	if (sleep5) OutputBoth (ERRMSG2); 
-	OutputBoth (ERRMSG3); 
+	if (sleep5) OutputBoth (ERRMSG2);
+        if (!fftfermat)
+            OutputBoth (ERRMSG3); 
  
 /* Sleep five minutes before restarting */ 
  
@@ -13608,6 +13639,7 @@ error:
                 abonroundoff = TRUE; // Don't accept any more Roundoff error.
             _unlink (filename);
 	}
+	will_try_larger_fft = FALSE;
 	goto restart; 
 
 } 
@@ -15163,6 +15195,8 @@ int primeContinue ()
         IniGetString (INI_FILE, (char*)"PgenOutputFile", outputfile, IBSIZE, NULL);
         IniGetString (INI_FILE, (char*)"MaxRoundOff", cmaxroundoff, 5, (char*)"0.40");
         maxroundoff = atof (cmaxroundoff);
+        IniGetString (INI_FILE, (char*)"MAXBPD", cMAXBPD, 5, (char*)"37.0");
+        MAXBPD = atof (cMAXBPD);
         IniGetString (INI_FILE, (char*)"PercentFFTLimit", cpcfftlim, 5, (char*)"0.50");
         pcfftlim = atof (cpcfftlim);
         if (!strcmp (inputfile, oldinputfile))

@@ -125,6 +125,7 @@ double gwyptimers[2*NBTIMERS] = {0.0};		/* Up to NBTIMERS separate timers */
 // k, b, n, c as global variables :
 
 extern giant gk;
+extern double MAXBPD;
 double kg;
 unsigned long bg, ng;
 signed long cg;
@@ -2741,6 +2742,7 @@ lucas_mul(	// Multiplication of large integers ; inputs and output normalized
 
 int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
     double bpw, bpwg, tbpw, tbpwg, kbits = 0.0, rdwt, rzpad, rgeneric; 
+    double bpddwt, bpdzpad, bpdgeneric;
     double log2k = 0.0, log2b, bitsmc = log(MAXMULCONST)/log(2.0);
     int incfft, fftwincr, fftdwt = 2, fftzpad = 2, fftgeneric = 2 , zpad = 0;
     unsigned long len, ki = (unsigned long)k;
@@ -2770,13 +2772,13 @@ int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
 
     i=0;    // Compute generic fftlengh (raw).
     incfft = FFTINC;
-    while ((gwtablep[i].max_exp) != 0) {
-        fftgeneric = gwtablep[i].fftlen;
+    while ((xgwtablep[i].max_exp) != 0) {
+        fftgeneric = xgwtablep[i].fftlen;
         if (fftgeneric < STRIDE_DIM*2)
             goto next1;
         else if ((double) n * log2b / (double) fftgeneric > 26.0)
             goto next1;
-        else if (rgeneric >= gwtablep[i].max_exp)
+        else if (rgeneric >= xgwtablep[i].max_exp)
             goto next1;
         else {
             if (incfft) {
@@ -2789,12 +2791,16 @@ int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
 next1:
         i++;
     }
+    bpdgeneric = (double) (b*xgwtablep[i].max_exp)/(double) fftgeneric;
+    if (bpdgeneric > MAXBPD)
+        bpdgeneric = MAXBPD;
     incfft = FFTINC;
     fftwincr = fftgeneric / 16;
     while (1) {  // Compute generic fftlengh (fine).
         bpwg = RINT((rgeneric+fftgeneric-1)/fftgeneric);
         tbpwg = 2.0*bpwg + bitsmc + 2.0;
-        if (tbpwg <= MAXBITSPERDOUBLE)
+//        if (tbpwg <= MAXBITSPERDOUBLE)
+        if (tbpwg <= bpdgeneric)
             break;
         else
             fftgeneric += fftwincr;
@@ -2804,13 +2810,13 @@ next1:
     
     incfft = FFTINC;
     i=0;    // Compute zero padded fftlengh (raw).
-    while ((/*max_exp = */gwtablep[i].max_exp) != 0) {
-        fftzpad = gwtablep[i].fftlen;
+    while ((/*max_exp = */xgwtablep[i].max_exp) != 0) {
+        fftzpad = xgwtablep[i].fftlen;
         if (fftzpad < STRIDE_DIM*2)
             goto next2;
         else if ((double) n * log2b / (double) fftzpad > 26.0)
             goto next2;
-        else if (rzpad >= gwtablep[i].max_exp)
+        else if (rzpad >= xgwtablep[i].max_exp)
             goto next2;
         else {
             if (incfft) {
@@ -2823,13 +2829,17 @@ next1:
 next2:
         i++;
     }
+    bpdzpad = (double) (b*xgwtablep[i].max_exp)/(double) fftzpad;
+    if (bpdzpad > MAXBPD)
+        bpdzpad = MAXBPD;
     incfft = FFTINC;
     // Compute zero padded FFT length (fine)
     fftwincr = fftzpad / 16;
     while (1) {
         bpw = RINT((rzpad+fftzpad-1)/fftzpad);
         tbpw = 2.0*bpw + bitsmc;
-        if (tbpw <= MAXBITSPERDOUBLE)
+//        if (tbpw <= MAXBITSPERDOUBLE)
+        if (tbpw <= bpdzpad)
             break;
         else
             fftzpad += fftwincr;
@@ -2839,21 +2849,21 @@ next2:
     
     i=0;    // Compute IBDWT FFT length (raw)
     incfft = FFTINC;
-    while ((/*max_exp = */gwtable[i].max_exp) != 0) {
-        fftdwt = gwtable[i].fftlen;
+    while ((/*max_exp = */xgwtable[i].max_exp) != 0) {
+        fftdwt = xgwtable[i].fftlen;
         bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
         tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
         if (fftdwt < STRIDE_DIM*2)
             goto next3;
         else if ((double) n * log2b / (double) fftdwt > 26.0)
             goto next3;
-        else if (rdwt >= gwtable[i].max_exp)
+        else if (rdwt >= xgwtable[i].max_exp)
             goto next3;
             // Top carry adjust can only handle k values of 34 bits or less.        
         else if (log2k >= 34.0)
             goto next3;
-        else if (tbpw > MAXBITSPERDOUBLE)   // 29/03/21
-            goto next3;
+//        else if (tbpw > MAXBITSPERDOUBLE)   // 29/03/21
+//            goto next3;
         else {
             if (incfft) {
                 i += incfft;
@@ -2865,13 +2875,27 @@ next2:
 next3:
         i++;
     }            
+    bpddwt = (double) (b*xgwtable[i].max_exp)/(double) fftdwt;
+    if (bpddwt > MAXBPD)
+        bpddwt = MAXBPD;
     incfft = FFTINC;
     fftwincr = fftdwt / 16;
-    bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
-    tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
+    while (fftdwt <= 33554432) {
+        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+        tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
+//        if (tbpw <= MAXBITSPERDOUBLE)
+        if (tbpw <= bpddwt)
+            break;
+        else
+            fftdwt += fftwincr;
+    }
+/*    sprintf (gwypbuf, "maxbpw = %g\n",
+            bpddwt);
+            if (printfunction != NULL)
+                (*printfunction)(gwypbuf); */
     while (incfft-- > 0)
         fftdwt += (fftwincr);
-    if (!generic && !zpad && (tbpw > MAXBITSPERDOUBLE))     // IBDWT impossible... 27/03/21
+    if (!generic && !zpad && (tbpw > bpddwt))     // IBDWT impossible... 27/03/21
         generic = 1;
     if (generic) {
         zpad = 0;

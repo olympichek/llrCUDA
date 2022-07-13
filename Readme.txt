@@ -1,9 +1,12 @@
 
-		Welcome to llrCUDA program Version 3.8.5 !
+		Welcome to llrCUDA program Version 3.8.6 !
 
 
 0) What is new in this version :
 
+  May 2022 : The range of available FFT lengthes has been extended using 
+  SSE2 Woltman tables. This allowed this version to test successfully
+  M82589933 in less than 8 days!
   In previous Version 3.8.4, one call to free() function was missing in Gerbicz
   error checking code ; this caused an important memory leak...
   This issue is now fixed here!

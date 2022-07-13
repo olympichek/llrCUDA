@@ -441,7 +441,7 @@ DIGITSONLY:
 
 		case 'V':
 		case 'v':
-			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.5 ; linked with CUDA Version 8.0.44\n");
+			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.6 ; linked with CUDA Version 8.0.44\n");
 			return (0); 
 
 /* -W - use a different working directory */
@@ -655,9 +655,15 @@ void Sleep (
 
 void SetPriority ()
 {
-    int	p;
+    int	p, result;
     p = (8 - (int) PRIORITY) * 20 / 7;
     setpriority (PRIO_PROCESS, getpid (), p);
+	if (CPU_AFFINITY != 99) {
+		char affstring [80];
+		sprintf (affstring, "taskset -p %d %d\n", CPU_MASK, getpid());
+		result = system (affstring);
+                if (result);
+	}
 }
 
 #else

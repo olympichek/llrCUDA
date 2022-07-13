@@ -352,25 +352,25 @@ const char *IniSectionGetStringRaw (	/* Return keyword's raw string value from a
 	return (IniSectionGetNthStringRaw (filename, section, keyword, 1));
 }
 
-/*const char *IniSectionGetNthStringRaw (	/* Return keyword's Nth raw string value from global section of the INI file. */
-/*	const char *filename,
+const char *IniSectionGetNthStringRaw (	/* Return keyword's Nth raw string value from global section of the INI file. */
+	const char *filename,
 	const char *section,
 	const char *keyword,
 	int	nth)			/* Nth occurrence of the keyword (nth starts at 1) */
-/*{
+{
 	struct IniCache *p;
 	unsigned int i;
 	const char *retval;
 
-/* Open ini file */
+ Open ini file */
 
-/*	if (INI_MUTEX == NULL) gwmutex_init (&INI_MUTEX);
+	if (INI_MUTEX == NULL) gwmutex_init (&INI_MUTEX);
 	gwmutex_lock (&INI_MUTEX);
 	p = openIniFile (filename, 0);
 
 /* Skip to the correct section */
 
-/*	i = 0;
+	i = 0;
 	if (section != NULL) {
 		for ( ; i < p->num_lines; i++) {
 			if (p->lines[i]->line_type == INI_LINE_HEADER &&
@@ -383,7 +383,7 @@ const char *IniSectionGetStringRaw (	/* Return keyword's raw string value from a
 
 /* Look for the keyword within this section */
 
-/*	for ( ; ; i++) {
+	for ( ; ; i++) {
 		if (i == p->num_lines ||
 		    p->lines[i]->line_type == INI_LINE_HEADER) {
 			retval = NULL;
@@ -399,9 +399,9 @@ const char *IniSectionGetStringRaw (	/* Return keyword's raw string value from a
 
 /* Unlock and return */
 
-/*	gwmutex_unlock (&INI_MUTEX);
+	gwmutex_unlock (&INI_MUTEX);
 	return (retval);
-}*/
+}
 
 void IniWriteString (			/* Write a string value to the global section of the INI file. */
 	const char *filename,

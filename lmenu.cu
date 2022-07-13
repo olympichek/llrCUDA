@@ -305,13 +305,13 @@ void options_preferences ()
 
 void help_about ()
 {
-	printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.5\n");
+	printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.6\n");
 	printf ("Using George Woltman's 1/k method IBDWT for k's up to 19 bits\n"); 
 	printf (" << Rational Base DWT for larger k's up to maximal double\n");
 	printf (" << Rational base DWT and generic reduction for larger k's or base != 2\n");
         printf ("Using GPU code written by Shoichiro Yamada for IBDWT,\n << extended further to Rational Bases and Generic reduction.\n");
         printf ("By default, all tests on base two numbers use Gerbicz error checking.\nThis is the case for PRP Fermat and SPRP tests as in Prime95 or Mprime,\nbut also for the deterministic prime tests of Proth numbers.\nLLR tests on Riesel numbers are only done after a positive Fermat PRP result.\n");
-	printf ("Written : Jan. 20011 - Apr. 2021 by Jean Penne\n");
+	printf ("Written : Jan. 20011 - May. 2022 by Jean Penne\n");
 	printf ("Email : jpenne@free.fr\n");
 	askOK ();
 }
