@@ -2748,7 +2748,7 @@ int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
     unsigned long len, ki = (unsigned long)k;
     unsigned long safety_bits;
     int i;
-
+    
     printfunction = (verbose)? both_output : screen_output;
     log2b = log2(b);
 
@@ -2756,17 +2756,20 @@ int set_fftlen (double k, unsigned long b, unsigned long n, signed long c) {
         kbits += 1.0;
         ki >>= 1;
     }
-    
+
     if (k > 0.0) {
         log2k = log2(k);
     }
     len = bitlen (gmodulus);
+//    gwyptrace (len);
     rdwt = len;     // Exponent for DWT mode
     rzpad = len + len + 32;
     
 // Exponents for zero padded and generic modes
     
     rgeneric = rzpad + 2*EB;
+    
+//    printf ("bitsmc = %g\n", bitsmc);
     
 // Compute the fftlength for each mode
 
@@ -2796,10 +2799,12 @@ next1:
         bpdgeneric = MAXBPD;
     incfft = FFTINC;
     fftwincr = fftgeneric / 16;
-    while (1) {  // Compute generic fftlengh (fine).
+    if (fftwincr < 1)
+        fftwincr = 1;   // JP 28/10/22
+    bpwg = RINT((rgeneric+fftgeneric-1)/fftgeneric);
+    while (fftgeneric <= 33554432) {  // Compute generic fftlengh (fine).
         bpwg = RINT((rgeneric+fftgeneric-1)/fftgeneric);
         tbpwg = 2.0*bpwg + bitsmc + 2.0;
-//        if (tbpwg <= MAXBITSPERDOUBLE)
         if (tbpwg <= bpdgeneric)
             break;
         else
@@ -2833,12 +2838,14 @@ next2:
     if (bpdzpad > MAXBPD)
         bpdzpad = MAXBPD;
     incfft = FFTINC;
+    bpw = RINT((rzpad+fftzpad-1)/fftzpad);
     // Compute zero padded FFT length (fine)
     fftwincr = fftzpad / 16;
-    while (1) {
+    if (fftwincr < 1)
+        fftwincr = 1;   // JP 28/10/22
+    while (fftzpad <= 33554432) {
         bpw = RINT((rzpad+fftzpad-1)/fftzpad);
         tbpw = 2.0*bpw + bitsmc;
-//        if (tbpw <= MAXBITSPERDOUBLE)
         if (tbpw <= bpdzpad)
             break;
         else
@@ -2851,7 +2858,8 @@ next2:
     incfft = FFTINC;
     while ((/*max_exp = */xgwtable[i].max_exp) != 0) {
         fftdwt = xgwtable[i].fftlen;
-        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+//        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.50*log2(abs(c)); // 21/10/22
         tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
         if (fftdwt < STRIDE_DIM*2)
             goto next3;
@@ -2880,10 +2888,12 @@ next3:
         bpddwt = MAXBPD;
     incfft = FFTINC;
     fftwincr = fftdwt / 16;
-    while (fftdwt <= 33554432) {
-        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+    if (fftwincr < 1)
+        fftwincr = 1;   // JP 28/10/22
+    while (fftdwt <= 33554432) {    // Compute IBDWT FFT length (fine)
+//        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.25*log2(abs(c)); // 15/03/21
+        bpw = RINT((rdwt+fftdwt-1)/fftdwt) + 0.50*log2(abs(c)); // 21/10/22
         tbpw = 2.0*bpw + kbits + bitsmc + 0.6*log((double)fftdwt)/log(2.0);
-//        if (tbpw <= MAXBITSPERDOUBLE)
         if (tbpw <= bpddwt)
             break;
         else
@@ -3178,7 +3188,6 @@ gwypsetup(
     double  dlimit, min_hlimit = 0.0, max_hlimit = 0.0;
     double  log2k, log2b;
     double  tc1 = 12345.6789, tc2 = 6789.12345;
-
     nb_malloc = 0, nb_free = 0, nb_cudamalloc = 0, nb_cudafree = 0; // 03/02/21
     if(bitlen (modulus_arg) < 128*8)    {
         return(1);  // Make only an APRCL test...
@@ -3934,7 +3943,7 @@ void gwypsetmulbyconst(
 // Set the maximum of the multiplicative constant
 
 void gwypsetmaxmulbyconst(
-    long s
+    unsigned long s     // JP 30/10/22
 )
 {
     MAXMULCONST = (double)s;

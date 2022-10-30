@@ -1,9 +1,14 @@
 
-		Welcome to llrCUDA program Version 3.8.6 !
+		Welcome to llrCUDA program Version 3.8.7 !
 
 
 0) What is new in this version :
 
+    I added two new ABC formats, principally to help PRP searchers.
+  - k*b^n+c format with k, b, c fixed, for example : ABC 22*17^n+13
+  - (k*b^n+c)/d format with k, b, c, d fixed, for example : ABC (1*16^n+619)/5
+  - In Proth or LLR tests, even values of k yield a false result...
+  These bugs are now fixed.
   May 2022 : The range of available FFT lengthes has been extended using 
   SSE2 Woltman tables. This allowed this version to test successfully
   M82589933 in less than 8 days!

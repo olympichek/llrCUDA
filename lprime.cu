@@ -441,7 +441,7 @@ DIGITSONLY:
 
 		case 'V':
 		case 'v':
-			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.6 ; linked with CUDA Version 8.0.44\n");
+			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.7 ; linked with CUDA Version 8.0.44\n");
 			return (0); 
 
 /* -W - use a different working directory */
@@ -548,18 +548,18 @@ DIGITSONLY:
 	if (MENUING)
             main_menu ();
 
-        if(CPU_AFFINITY != 99)
+        cudaGetDeviceCount( &device_count);
+        
+        if(CPU_AFFINITY != 99) {
             device_number = CPU_AFFINITY;
         
-        cudaGetDeviceCount( &device_count);
-//        trace (device_number);
-//        trace (device_count);
-        
         if (device_number >= device_count)
-        {
-            printf("device_number >=  device_count ... exiting\n");
+            {
+            printf("device_number = %d >= device_count = %d ... exiting\n", device_number, device_count);
             exit(2);
+            }
         }
+            
         
         cudaSetDeviceFlags(cudaDeviceBlockingSync);
         cudaSetDevice(device_number);

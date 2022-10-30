@@ -127,9 +127,17 @@ char abcmstring[]  = "$a*$b^$c-%d";
 
 char abcastring[] = "$a*$b^$c$d";
 
+// k*b^n+c format with k, b, c fixed
+
+char abcnstring[] = "%lu*%lu^n%d";
+
 // General (k*b^n+c)/d format 
 
 char abcadstring[] = "($a*$b^$c$d)/$e";
+
+// (k*b^n+c)/d format with k, b, c, d fixed
+
+char abcndstring[] = "(%lu*%lu^n%d)/%lu";
 
 // Test the primality of a number given as a string
 
@@ -143,7 +151,9 @@ char wftstring[] = "$a$b";
 
 char wfsstring[] = "$a$b$c";
 
-#define ABCDP	28  // Format used for DivPhi()
+#define ABCVARAQS   19 // k, b, n, c and divisor specified on each input line or header
+#define ABCVARAS    18 // k, b, n, and c specified on each input line or header
+#define ABCDP	    28  // Format used for DivPhi()
 
 
 /* Process a number from newpgen output file */
@@ -237,6 +247,7 @@ giant	gb = NULL;	/* Generalized Fermat base may be a large integer... */
 
 unsigned long Nlen = 0;	/* Bit length of number being LLRed or PRPed */
 unsigned long klen = 0;	/* Number of bits of k multiplier */
+unsigned long n_orig;	/* exponent associated to initial base sgb */
 long OLDFFTLEN = 0; /* previous value of FFTLEN, used by setuponly option */
 unsigned long ndiff = 0;/* used for b^n-b^m+c number processing */
 unsigned long gformat;	/* used for b^n-b^m+c number processing */
@@ -5611,7 +5622,6 @@ int commonFrobeniusPRP (
 	A = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 
 	D = P*P - 4*Q;
-        
 //	Compute needed large integer and gwypnum constants
 
 	itogwyp (2, gw2);
@@ -5712,9 +5722,9 @@ int commonFrobeniusPRP (
 
 	gwypfft_description (fft_desc);
 #ifdef WIN32
-	sprintf (buf, "%s, P = %lu, Q = %lu\n", fft_desc, P, Q);
+	sprintf (buf, "%s, P = %ld, Q = %ld\n", fft_desc, P, Q);
 #else
-	sprintf (buf, "%s, P = %lu, Q = %lu", fft_desc, P, Q);
+	sprintf (buf, "%s, P = %ld, Q = %ld", fft_desc, P, Q);
 #endif
 	OutputStr (buf);
 	LineFeed ();
@@ -6013,9 +6023,9 @@ Frobeniusresume:
 
 		gwypfft_description (fft_desc);
 #ifdef WIN32
-		sprintf (buf, "%s, Q = %lu\n", fft_desc, Q);
+		sprintf (buf, "%s, Q = %ld\n", fft_desc, Q);
 #else
-		sprintf (buf, "%s, Q = %lu", fft_desc, Q);
+		sprintf (buf, "%s, Q = %ld", fft_desc, Q);
 #endif
 		OutputStr (buf);
 		LineFeed();
@@ -7724,8 +7734,8 @@ int fastIsPRP (
 //      Init work_unit used by the Gerbicz code
         
 	w->k = k;
-	w->n = n;
 	w->b = b;
+	w->n = n;
 	w->c = c;
 	w->prp_base = a;
 	w->prp_residue_type = strong? PRP_TYPE_SPRP : PRP_TYPE_FERMAT;
@@ -7735,8 +7745,8 @@ int fastIsPRP (
 		w->known_factors = NULL;
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (a);
-		if (!setupok (gwypsetup (k, b, n, c,(quotient||(format == ABCDP))?M:N), N, str, res)) {
+		gwypsetmaxmulbyconst (abs(a));
+		if (!setupok (gwypsetup (k, b, n, c,(/*quotient||*/(format == ABCDP))?M:N), N, str, res)) {
 			return TRUE;
 		}
 
@@ -7774,7 +7784,7 @@ int fastIsCC1P (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
 		if (!setupok (gwypsetup (k, b, n, c, N), N, str, res)) {
 			return TRUE;
 		}
@@ -7821,7 +7831,7 @@ int fastIsCC2P (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst(P);
+		gwypsetmaxmulbyconst(abs(P));
 		if (!setupok (gwypsetup (k, b, n, c, N), N, str, res)) {
 			return TRUE;
 		}
@@ -7850,7 +7860,7 @@ int fastIsFrobeniusPRP (
 {
 	char	buf[sgkbufsize+256]; 
 	int	retval;
-	uint32_t P = 3, Q = 0;
+	int32_t P = 3, Q = 0;
 	long D, sign1, sign2, abs_d, sqrtabs_d;
 
 /* Init. the relevant constants */
@@ -7858,7 +7868,7 @@ int fastIsFrobeniusPRP (
 	if (bpsw) {
             P = 1;
             sign1 = N->n[0]&2? -1 : 1;	    // sign of kronecker(-1, N)
-            for (abs_d = 5;abs_d <= 2147483647;abs_d += 2) {
+            for (abs_d = 5;abs_d < 2147483647;abs_d += 2) { // JP 27/10/22
                 sign2 = abs_d&2 ? -1 : 1;   // requested sign of D
                 if ((D = isLucasBaseQ (N, abs_d, ((sign2 == -1) && (sign1 == -1))? 1 : -1)) == TRUE) {
                     sqrtabs_d = (int)floor(sqrt((double)abs_d));
@@ -7898,13 +7908,13 @@ int fastIsFrobeniusPRP (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (max (3, Q));
+		gwypsetmaxmulbyconst (bpsw?2:3); // JP 30/10/22
                 if (recovering)
                     cufftonly = TRUE;   // 19/04/21
 		if (!setupok (gwypsetup (k, b, n, c, N), N, str, res)) {
 			return TRUE;
 		}
-
+		
 /* Do the Frobenius PRP test */
 
 		retval = commonFrobeniusPRP (P, Q, res, str);
@@ -7935,7 +7945,7 @@ int slowIsFrobeniusPRP (
 	if (bpsw) {
 		P = 1;
 		sign1 = N->n[0]&2? -1 : 1;			// sign of kronecker (-1, N)
-		for (abs_d = 5;abs_d <= 2147483647;abs_d += 2) {
+		for (abs_d = 5;abs_d < 2147483647;abs_d += 2) { // JP 27/10/22
 			sign2 = abs_d&2 ? -1 : 1;		// requested sign of D
 			if ((D = isLucasBaseQ (N, abs_d, ((sign2 == -1) && (sign1 == -1))? 1 : -1)) == TRUE) {
 				sqrtabs_d = (int)floor(sqrt((double)abs_d));
@@ -7974,7 +7984,7 @@ int slowIsFrobeniusPRP (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (max (3, Q));
+		gwypsetmaxmulbyconst (bpsw?2:3); // JP 30/10/22
                 if (recovering)
                     cufftonly = TRUE;   // 19/04/21
 		if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
@@ -8012,7 +8022,7 @@ int slowIsWieferich (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
 		if (!setupok (gwypsetup_general_mod_giant (M), M, str, res)) {
 			return TRUE;
 		}
@@ -8098,7 +8108,7 @@ int slowIsPRP (
 		w->known_factors = NULL;
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
 		if (!setupok (gwypsetup_general_mod_giant (quotient||(format == ABCDP)?M:N), N, str, res)) {
 			return TRUE;
 		}
@@ -8137,7 +8147,7 @@ int slowIsCC1P (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
 		if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
 			return TRUE;
 		}
@@ -8180,7 +8190,7 @@ int slowIsCC2P (
 
 	do {
 		gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-		gwypsetmaxmulbyconst(P);
+		gwypsetmaxmulbyconst(abs(P));
 		if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
 			return TRUE;
 		}
@@ -8373,8 +8383,8 @@ int gisPRPinternal (
 #define ABCFNGS	15  // Fixed n:  k and b specified on each input line
 #define ABCFNAS	16  // Fixed n:  k, b, and c specified on each input line
 #define ABCVARGS    17	// k, b, and n specified on each input line
-#define ABCVARAS    18	// k, b, n, and c specified on each input line
-#define ABCVARAQS   19	// k, b, n, c and quotient specified on each input line
+//#define ABCVARAS  18  // k, b, n, and c specified on each input line
+//#define ABCVARAQS 19  // k, b, n, c and quotient specified on each input line
 #define	ABCRU	20  // (10^n-1)/9 Repunits
 #define	ABCGRU	21  // (b^n-1)/(b-1) Generalized Repunits
 
@@ -8401,7 +8411,7 @@ int IsPRP (	    // General PRP test
 	giant gd, gr;
 
         if (format == ABCRU || format == ABCGRU) {	// Repunits or Generalized Repunits
-		sprintf (str, "(%lu^%lu-1)/%lu", base, n, base-1);
+		sprintf (str, "(%lu^%lu-1)/%lu", base, n_orig, base-1);
 		gk = newgiant (1);
 		itog (1, gk);
 	}
@@ -8411,7 +8421,7 @@ int IsPRP (	    // General PRP test
             gshiftleft (shift, gk);		// Shift k multiplier if requested
             gtoc (gk, sgk1, sgkbufsize);	// Updated k string
             if (mask & MODE_DUAL) {
-                sprintf (str, "%lu^%lu%c%d", base, n, incr < 0 ? '-' : '+', abs(incr));
+                sprintf (str, "%lu^%lu%c%d", base, n_orig, incr < 0 ? '-' : '+', abs(incr));
             }
             else if (format != NPGAP) {   // Not MODE_AP
                 if (!strcmp(sgk1, "1")) {
@@ -8419,21 +8429,21 @@ int IsPRP (	    // General PRP test
                         char *p;
                         while ((p = strchr (sgd,'.'))!=NULL)
                             *p = '/';
-                        sprintf (str, "%s^%lu%c%d", sgb, n, incr < 0 ? '-' : '+', abs(incr));
+                        sprintf (str, "%s^%lu%c%d", sgb, n_orig, incr < 0 ? '-' : '+', abs(incr));
                     }
                     else
-                        sprintf (str, "%s^%lu%c%d", sgb, n, incr < 0 ? '-' : '+', abs(incr));
+                        sprintf (str, "%s^%lu%c%d", sgb, n_orig, incr < 0 ? '-' : '+', abs(incr));
                 }
                 else {
                     if (format == ABCVARAQS) {
                         char *p;
                         while ((p = strchr (sgd,'.'))!=NULL)
                             *p = '/';
-                        sprintf (str, "%s*%s^%lu%c%d", sgk1, sgb, n, incr < 0 ? '-' : '+', abs(incr));
+                        sprintf (str, "%s*%s^%lu%c%d", sgk1, sgb, n_orig, incr < 0 ? '-' : '+', abs(incr));
                     }
                     else {
                         if ((n != 0) || (incr != 0))
-                            sprintf (str, "%s*%s^%lu%c%d", sgk1, sgb, n, incr < 0 ? '-' : '+', abs(incr));
+                            sprintf (str, "%s*%s^%lu%c%d", sgk1, sgb, n_orig, incr < 0 ? '-' : '+', abs(incr));
                         else
                             sprintf (str, "%s", sgk1);
                     }
@@ -8446,11 +8456,11 @@ int IsPRP (	    // General PRP test
 		gshiftleft (n-2, gk);	// Warning : here, n is exponent+1 !
 		if (format == ABCK) {
 			iaddg (1, gk);
-			sprintf (str, "%s*2^%lu%c1 = (2^%lu+1)^2 - 2", sgk, n, '-', n-1);
+			sprintf (str, "%s*2^%lu%c1 = (2^%lu+1)^2 - 2", sgk, n_orig, '-', n-1);
 		}
 		else {
 			iaddg (-1, gk);
-			sprintf (str, "%s*2^%lu%c1 = (2^%lu-1)^2 - 2", sgk, n, '-', n-1);
+			sprintf (str, "%s*2^%lu%c1 = (2^%lu-1)^2 - 2", sgk, n_orig, '-', n-1);
 		}
 	}
 
@@ -8460,7 +8470,7 @@ int IsPRP (	    // General PRP test
 		itog (base, gk);
 		power (gk, ndiff);
 		iaddg (-1, gk);
-		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n+ndiff, base, n, incr < 0 ? '-' : '+', abs(incr));
+		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n+ndiff, base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 	}
 	bits = (unsigned long) ((n * log(base)) / log(2) + bitlen(gk)); 
 	N =  newgiant ((bits >> 2) + 8);   // Allocate memory for N
@@ -8527,13 +8537,14 @@ int IsPRP (	    // General PRP test
 		p = sgd;
                 M =  newgiant ((bits >> 2) + 8);        // Allocate memory for M
                 gtog (N, M);                            // keep M = N*known factors
-		while (TRUE) {
-			strcpy (factor, p);
-			if ((p2 = strchr (p,'/'))!=NULL) {
-				p = &p2[1];
-				if ((p2 = strchr (factor,'/'))!=NULL)
-					*p2 = 0;
+                while (p != NULL) {
+			strcpy (factor, p);             // copy the tail of the chain.
+			if ((p2 = strchr (p,'/'))!=NULL) {// search for next factor.
+                            factor[p2-p] = '\0';        // terminate the present factor.
+                            p = &p2[1];                 // Point on next factor or end.
 			}
+			else
+                            p = NULL;
 			if (!isDigitString(factor)) {
 				sprintf (buf,"invalid digit string : %s\n", factor);
 				OutputBoth (buf);
@@ -8544,7 +8555,7 @@ int IsPRP (	    // General PRP test
 				free (gk);
 				return TRUE;
 			}
-			ctog (factor, gd);						// Convert divisor string to giant
+			ctog (factor, gd);   // Convert divisor string to giant
 			gtog (N, gr);
 			modg (gd, gr);
 			if (!isZero(gr)) {
@@ -8561,10 +8572,10 @@ int IsPRP (	    // General PRP test
 			else {
                             divg (gd, N);
 			}
-			if (p2 == NULL)
+			if (p == NULL)
                             break;
 		}
-		w->prp_residue_type = PRP_TYPE_COFACTOR;
+                w->prp_residue_type = PRP_TYPE_COFACTOR;
 		w->known_factors = sgd;
 		quotient = TRUE;
 		strong = FALSE;
@@ -8608,12 +8619,10 @@ int IsPRP (	    // General PRP test
 		if (gk->sign > 3)
 			dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
 		}
-		
 		if (setupok ((nbdg < 400), N, str, res)) // Force APRCL test for small numbers...
                     retval = isPRPinternal (str, dk, base, n, incr, res);
                 else
                     retval = TRUE;
-//	}
 
 	strong = TRUE;		// Restore Strong Fermat PRP test
 
@@ -8852,13 +8861,13 @@ int IsCCP (	// General test for the next prime in a Cunningham chain
 	gshiftleft (shift, gk);			// Shift k multiplier if requested
 	gtoc (gk, sgk1, sgkbufsize);		// Updated k string
 		if (mask & MODE_DUAL) {
-			sprintf (str, "%lu^%lu%c%d", base, n, incr < 0 ? '-' : '+', abs(incr));
+			sprintf (str, "%lu^%lu%c%d", base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 		}
 		else
 			if (!strcmp(sgk1, "1"))
-				sprintf (str, "%lu^%lu%c%d", base, n, incr < 0 ? '-' : '+', abs(incr));
+				sprintf (str, "%lu^%lu%c%d", base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 			else
-				sprintf (str, "%s*%lu^%lu%c%d", sgk1, base, n, incr < 0 ? '-' : '+', abs(incr));
+				sprintf (str, "%s*%lu^%lu%c%d", sgk1, base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 
 	bits = (unsigned long) ((n * log(base)) / log(2) + bitlen(gk)); 
 	N =  newgiant ((bits >> 2) + 8);   // Allocate memory for N
@@ -10162,7 +10171,7 @@ int plusminustest (
 		itog (base, gk);
 		power (gk, ndiff);
 		iaddg (-1, gk);
-		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n+ndiff, base, n, incr < 0 ? '-' : '+', abs(incr));
+		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n_orig+ndiff, base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 	}
         else {
             gk = newgiant (strlen(sgk)/2 + 8);	// Allocate one byte per decimal digit + spares
@@ -10170,9 +10179,9 @@ int plusminustest (
             gshiftleft (shift, gk);	   // Shift k multiplier if requested
             gtoc (gk, sgk1, sgkbufsize);   // Updated k string
             if (!strcmp(sgk1, "1"))
-		sprintf (str, "%lu^%lu%c%d", base, n, (incr < 0) ? '-' : '+', abs(incr));
+		sprintf (str, "%lu^%lu%c%d", base, n_orig, (incr < 0) ? '-' : '+', abs(incr));
             else
-		sprintf (str, "%s*%lu^%lu%c%d", sgk1, base, n, (incr < 0) ? '-' : '+', abs(incr));
+		sprintf (str, "%s*%lu^%lu%c%d", sgk1, base, n_orig, (incr < 0) ? '-' : '+', abs(incr));
         }
 
 	klen = bitlen(gk);
@@ -10328,7 +10337,7 @@ restart:
 
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 	if (incr == +1) {
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
                 gtog (M,tmp);                   // tmp = (N-1)/base
 		explen = bitlen (tmp);
 		if (!setupok (gwypsetup (dk, base, n, +1,N), N, str, res)) {
@@ -10343,7 +10352,7 @@ restart:
 		tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
 	}
 	else {
-		gwypsetmaxmulbyconst (max(a, P));
+		gwypsetmaxmulbyconst (max(abs(a), abs(P)));
 //		gtog (N, M);
 //		iaddg (1, M);
 		explen = bitlen (tmp);
@@ -10702,7 +10711,7 @@ DoLucas:
 					gwypdone ();
 								// Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-					gwypsetmaxmulbyconst (max(a, P));
+					gwypsetmaxmulbyconst (max(abs(a), abs(P)));
 					if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
 						gwypfree(gk);
 						gwypfree(N);
@@ -12036,7 +12045,7 @@ restart:
 
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 	if (incr == +1) {
-            gwypsetmaxmulbyconst (a);
+            gwypsetmaxmulbyconst (abs(a));
 //            divg (gb, tmp);		// tmp = (N-1)/base
 //            gtog (gb, tmp);
 //            power (tmp, n-1);
@@ -12057,7 +12066,7 @@ restart:
             tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
 	}
 	else {
-            gwypsetmaxmulbyconst (max(a, P));
+            gwypsetmaxmulbyconst (max(abs(a), abs(P)));
 //            gtog (N, M);
 //            iaddg (1, M);
             explen = bitlen (tmp);
@@ -12432,7 +12441,7 @@ DoLucas:
 					gwypdone ();
                                 // Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-					gwypsetmaxmulbyconst (max(a, P));
+					gwypsetmaxmulbyconst (max(abs(a),abs(P)));
 					if (!setupok (gwypsetup (dk, 1, n, -1, N), N, str, res)) {
 						gwypfree(gk);
 						gwypfree(N);
@@ -12765,20 +12774,6 @@ int isLLRP (
                         nbllr_mallocs++;
 			ctog (sgk, gk);				// Convert k string to giant
 		}
-		klen = bitlen(gk);	// Bit length ok initial k multiplier
-
-		if (klen > 53) {	// we must use generic reduction
-			dk = 0.0;
-		}
-		else {			// we can use DWT ; compute the multiplier as a double
-			dk = (double)gk->n[0];
-			if (gk->sign > 1)
-				dk += 65536.0*(double)gk->n[1];
-			if (gk->sign > 2)
-				dk += 65536.0*65536.0*(double)gk->n[2];
-			if (gk->sign > 3)
-				dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
-		}
 // Lei
 		if (b_else != 1) {				// Compute the big multiplier
 			gk1 = newgiant ((gksize>>2) + 8);
@@ -12821,11 +12816,11 @@ int isLLRP (
 		gshiftleft (n-2, gk);				// Warning : here, n is exponent+1 !
 		if (format == ABCK) {
 			iaddg (1, gk);
-			sprintf (str, "%s*2^%lu%c1 = (2^%lu+1)^2 - 2", sgk, n, '-', n-1);
+			sprintf (str, "%s*2^%lu%c1 = (2^%lu+1)^2 - 2", sgk, n_orig, '-', n_orig-1);
 		}
 		else {
 			iaddg (-1, gk);
-			sprintf (str, "%s*2^%lu%c1 = (2^%lu-1)^2 - 2", sgk, n, '-', n-1);
+			sprintf (str, "%s*2^%lu%c1 = (2^%lu-1)^2 - 2", sgk, n_orig, '-', n_orig-1);
 		}
 	}
 
@@ -12845,6 +12840,18 @@ int isLLRP (
 	Nlen = bitlen (N); 
 	nbdg = gnbdg (N, 10);	// Compute the number of decimal digits of the tested number.
 
+	if (klen > 53 || generic) {// we must use generic reduction. 12/06/20
+		dk = 0.0;
+	}
+	else {	// we can use DWT ; compute the multiplier as a double
+		dk = (double)gk->n[0];
+		if (gk->sign > 1)
+			dk += 65536.0*(double)gk->n[1];
+		if (gk->sign > 2)
+			dk += 65536.0*65536.0*(double)gk->n[2];
+		if (gk->sign > 3)
+			dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
+	}
 	if ((klen > n) && (nbdg > 400)) {
 		if ((format == ABCDN) || (format == ABCDNG))
 			sprintf(buf, "2^%lu-1 > 2^%lu, so we can only do a PRP test for %s.\n", ndiff, n, str);
@@ -12856,7 +12863,8 @@ int isLLRP (
 		else
 			sprintf (str, "%s*%lu^%lu%c1", sgk, binput, ninput, '-');
                     // Number N to test, as a string
-		retval = isPRPinternal (str, dk, binput, ninput, -1, res);
+//BUG!		retval = isPRPinternal (str, dk, binput, ninput, -1, res);
+		retval = isPRPinternal (str, dk, binput, n, -1, res);
 
 		gwypfree(gk);
                 nbllr_frees++;
@@ -12876,8 +12884,7 @@ int isLLRP (
 		else
 			sprintf (str, "%s*%lu^%lu%c1", sgk, binput, ninput, '-');     // Number N to test, as a string
 				fermat_only = TRUE;
-//                                strong = FALSE;
-
+//              strong = FALSE;
                 retval = isPRPinternal (str, dk, 2, n, -1, res);
 				fermat_only = FALSE;
 
@@ -12923,7 +12930,9 @@ restart:
                 return TRUE;
             }
         }	// end dk == 0.0
-	else if (!setupok (gwypsetup (dk, binput, ninput, -1, N), N, str, res)) { 
+//	else if (!setupok (gwypsetup (dk, binput, ninput, -1, N), N, str, res)) {    BUG!
+	else if (!setupok (gwypsetup (dk, 2, n, -1, N), N, str, res)) {
+            // JP 18/10/22
 		gwypfree(gk);
                 nbllr_frees++;
 		gwypfree(N);
@@ -13669,7 +13678,7 @@ int isLLRW (
 	else
 		strcpy (sgk1, sgk);
 
-	sprintf (str, "%s*2^%lu%c1", sgk1, n, '-');	// Number N to test, as a string
+	sprintf (str, "%s*2^%lu%c1", sgk1, n_orig, '-');	// Number N to test, as a string
 
 	bits = n + bitlen(gk);				// Bit length of N
 	N =  newgiant ((bits>>3) + 8);		// Allocate memory for N
@@ -13712,7 +13721,7 @@ int isProthW (
 	else
 		strcpy (sgk1, sgk);
 
-	sprintf (str, "%s*2^%lu%c1", sgk1, n, '+');	// Number N to test, as a string
+	sprintf (str, "%s*2^%lu%c1", sgk1, n_orig, '+');	// Number N to test, as a string
 
 	bits = n + bitlen(gk);				// Bit length of N
 	N =  newgiant ((bits>>3) + 8);		// Allocate memory for N
@@ -13783,21 +13792,6 @@ int isProthP (
 		gk = newgiant ((gksize)  + 8);  // Allocate space for gk incr 11/11/20
 		ctog (sgk, gk);			// Convert k string to giant
 	}
-
-	klen = bitlen(gk);	// Length of initial k multiplier
-	if (klen > 53) {	// we must use generic reduction
-		dk = 0.0;
-	}
-	else {			// we can use DWT, compute k as a double
-		dk = (double)gk->n[0];
-		if (gk->sign > 1)
-			dk += 65536.0*(double)gk->n[1];
-		if (gk->sign > 2)
-			dk += 65536.0*65536.0*(double)gk->n[2];
-		if (gk->sign > 3)
-			dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
-	}
-
 // Lei
 	if (b_else != 1) {					// Compute the big multiplier
 		gk1 = newgiant ((gksize>>2) + 8);
@@ -13822,7 +13816,7 @@ int isProthP (
 		if (b_else != 1)	// Lei, J.P.
 			sprintf (str, "%s*%lu^%lu%c1", sgk, binput, ninput, '+');// Number N to test, as a string
 		else
-			sprintf (str, "%s*2^%lu%c1", sgk1, n, '+');	// Number N to test, as a string
+			sprintf (str, "%s*2^%lu%c1", sgk1, n_orig, '+');	// Number N to test, as a string
 
 
 	bits = n + bitlen(gk);	        // Bit length of N
@@ -13845,8 +13839,19 @@ int isProthP (
 	Nlen = bitlen (N); 
 	klen = bitlen(gk);
 	nbdg = gnbdg (N, 10);	// Compute the number of decimal digits of the tested number.
-
-
+        
+	if (klen > 53 || generic) {    // we must use generic reduction
+		dk = 0.0;
+	}
+	else {	// we can use DWT ; compute the multiplier as a double
+		dk = (double)gk->n[0];
+		if (gk->sign > 1)
+			dk += 65536.0*(double)gk->n[1];
+		if (gk->sign > 2)
+			dk += 65536.0*65536.0*(double)gk->n[2];
+		if (gk->sign > 3)
+			dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
+	}
 	if ((klen > n) && (nbdg > 400)) {
 		if ((format == ABCDN) || (format == ABCDNG))
 		    sprintf(buf, "2^%lu-1 > 2^%lu, so we can only do a PRP test for %s.\n", ndiff, n, str);
@@ -13860,7 +13865,8 @@ int isProthP (
 			sprintf (str, "%lu^%lu-%lu^%lu+1", binput, ninput+ndiff, binput, ninput);
 		else
 			sprintf (str, "%s*%lu^%lu%c1", sgk, binput, ninput, '+');     // Number N to test, as a string
-                retval = isPRPinternal (str, dk, binput, ninput, 1, res);
+// BUG!               retval = isPRPinternal (str, dk, binput, ninput, 1, res);
+                retval = isPRPinternal (str, dk, 2, n, 1, res);
 // Lei end
 
 		gwypfree(gk);
@@ -13897,7 +13903,7 @@ if ((a = genProthBase(gk, n)) < 0) {
 
 	do {
 //restart:
-                gwypsetmaxmulbyconst (a);
+                gwypsetmaxmulbyconst (abs(a));
 		if (dk == 0.0) {  // generic modular reduction needed...
 			gwypset_larger_fftlen_count((char)IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 			if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
@@ -13911,7 +13917,8 @@ if ((a = genProthBase(gk, n)) < 0) {
 		else {
 //restart2:
 			gwypset_larger_fftlen_count((char)IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-			if (!setupok (gwypsetup (dk, binput, ninput, +1, N), N, str, res)) {
+//			if (!setupok (gwypsetup (dk, binput, ninput, +1, N), N, str, res)) {   BUG!
+			if (!setupok (gwypsetup (dk, 2, n, +1, N), N, str, res)) {// JP 18/10/22
                                 gwypdone ();
 				free(gk);
 				free(N);
@@ -14044,8 +14051,8 @@ int isGMNP (
 	}
 
 	sign = (((n&7) == 3) || ((n&7) == 5))? 1 : 0;	// 1 if positive, 0 if negative
-	sprintf (str, "2^%lu%c%s+1",  n, (sign) ? '+' : '-', sgk);	// Number N to test, as a string
-	sprintf (strp, "(2^%lu%c%s+1)/5",  n, (sign) ? '-' : '+', sgk);	// Number N' to test, as a string
+	sprintf (str, "2^%lu%c%s+1",  n_orig, (sign) ? '+' : '-', sgk);	// Number N to test, as a string
+	sprintf (strp, "(2^%lu%c%s+1)/5",  n_orig, (sign) ? '-' : '+', sgk);	// Number N' to test, as a string
 
 	bits = 2*n+1;							// Bit length of M = N*N'
 	M = newgiant ((bits>>1) + 8);	// Allocate memory for M = N*N'
@@ -14120,7 +14127,7 @@ int isGMNP (
 
 //restart:
 
-// 	gwypsetmaxmulbyconst (a);
+// 	gwypsetmaxmulbyconst (abs(a));
 
 //restart:
 
@@ -14460,7 +14467,7 @@ restart:
 	}
 	else {									// Set he base for the SPRP test
 		a = IniGetInt (INI_FILE, (char*)"FBase", 3);
-		gwypsetmaxmulbyconst (a);
+		gwypsetmaxmulbyconst (abs(a));
 		expx = n;
 		tempFileName (filename, 's', NP);	// Set the filename to sxxxxxxx
 	}
@@ -15022,6 +15029,7 @@ int process_num (
     unsigned long ninput = n, base, binput, b_2up = 1, b_else = 1, superPRP = 1;
     long mult;
 // Lei end
+    n_orig = n;
 
     gformat = format; // save format in a global.
 
@@ -15081,6 +15089,7 @@ int process_num (
         while (!(base&1) && base > 2) {
             // Divide the base by two as far as possible
             base >>= 1;
+            gshiftright (1, gb); // update also gb JP 21/10/22
             n += ninput;
         }
             
@@ -15096,6 +15105,7 @@ int process_num (
             else {
 // Lei end
                 base = binput;
+                itog (binput, gb); // Restore also gb JP 21/10/22
                     // Do not modify because PRP will be forced...
                 n = ninput;
             }
@@ -15176,7 +15186,7 @@ int primeContinue ()
         char    inputfile[80], outputfile[80], oldinputfile[80], cmaxroundoff[10], cpcfftlim[10], sgk[sgkbufsize], buff[sgkbufsize+256];
         char	hbuff[sgkbufsize+256], outbuf[sgkbufsize+256], last_processed_k[sgkbufsize+256];
         FILE *fd;
-        unsigned long i, chainlen, m, n, base, nfudge, nn;
+        unsigned long i, chainlen, m, n, base, nfudge, nn, k, b, d;
         int firstline, line, hline, resultline,
         outfd, outfdp, outfdm, res, incr, sign, argcnt, validheader = FALSE;
         char c;
@@ -15328,6 +15338,20 @@ OPENFILE :
                 }
                 else if (!strcmp (pinput, abcadstring)) {
                     format = ABCVARAQS;
+                    nargs = 5;
+                }
+                else if (nargs = sscanf (pinput, abcndstring, &k, &b, &incr, &d)==4) {
+                    format = ABCVARAQS;
+                    sprintf (sgk, "%lu", k); // convert to string
+                    sprintf (sgb, "%lu", b); // convert to string
+                    sprintf (sgd, "%lu", d); // convert to string
+                    nargs = 1;
+                }
+                else if (nargs = sscanf(pinput, abcnstring, &k, &b, &incr) == 3) {
+                    format = ABCVARAS;
+                    sprintf(sgk, "%lu", k); // convert to string
+                    sprintf(sgb, "%lu", b); // convert to string
+                    nargs = 1;
                 }
                 else if (!strcmp (pinput, diffnumstring)) {
                     format = ABCDNG;
@@ -15346,6 +15370,7 @@ OPENFILE :
                 }
                 else if (!strcmp (pinput, abcastring)) {
                     format = ABCVARAS;
+                    nargs = 4;
                 }
                 else if (!strcmp (pinput, ffstring)) {
                     format = ABCFF;
@@ -16198,18 +16223,18 @@ OPENFILE :
                         IniWriteInt (INI_FILE, (char*)"ResultLine", line);	     // update the result line
                     }
                 }
-                else if (format == ABCVARAS)    {
-                    // k, b, n, and c specified on each input line
-                    if (sscanf (buff+begline, "%s %s %lu %d", sgk, sgb, &n, &incr) != 4)
-                        continue;	// Skip invalid line
+                else if ((format == ABCVARAS) && (nargs == 4))	{// k, b, n, and c specified on each input line
+                    if (sscanf(buff + begline, "%s %s %lu %d", sgk, sgb, &n, &incr)!=4)
+                        continue;   // Skip invalid line
                     if (!isDigitString(sgk))
-                        continue;	// Skip invalid line
+                        continue;   // Skip invalid line
                     if (!isDigitString (sgb))
-                        continue;	// Skip invalid line
+                        continue;   // Skip invalid line
                     if (rising_ns && !rising_ks && (n <= last_processed_n))
-                        continue;	// Skip already processed n's
-                    if (rising_ks && !rising_ns && (digitstrcmp (sgk, last_processed_k) <= 0))
-                        continue;	// Skip already processed k's
+                        continue;   // Skip already processed n's
+                    if (rising_ks && !rising_ns && (digitstrcmp (sgk,
+                        last_processed_k) <= 0))
+                        continue;   // Skip already processed k's
                     if ((rising_ns && !rising_ks) || (!rising_ns && rising_ks))
                         fclose (fd);// Unlock the file during the test...
                     if (! process_num (format, sgk, sgb, n, incr, shift, &res))
@@ -16218,15 +16243,41 @@ OPENFILE :
                         resultline = IniGetInt(INI_FILE, (char*)"ResultLine", 0);
                         outfd = _open (outputfile, _O_TEXT | _O_RDWR | _O_APPEND | _O_CREAT, 0666);
                         if (outfd) {
-                            if (hline >= resultline) {
-                                // write the relevant header
-                                wc = _write (outfd, hbuff, strlen (hbuff));
+                            if (hline >= resultline) {	// write the relevant header
+                                writelg = _write (outfd, hbuff, strlen (hbuff));
                             }
                             sprintf (outbuf, "%s %s %lu %d\n", sgk, sgb, n, incr); 
-                            wc = _write (outfd, outbuf, strlen (outbuf));
+                            writelg = _write (outfd, outbuf, strlen (outbuf));
                             _close (outfd);
                         }
-                        IniWriteInt (INI_FILE, (char*)"ResultLine", line);	     // update the result line
+                        IniWriteInt (INI_FILE, (char*)"ResultLine", line);// update the result line
+                    }
+                }
+                else if ((format == ABCVARAS) && (nargs == 1)) {// Only n specified on each input line
+                    if (sscanf(buff + begline, "%lu", &n)!=1)
+                        continue;   // Skip invalid line
+                    if (!isDigitString(sgk))
+                        continue;   // Skip invalid line
+                    if (!isDigitString(sgb))
+                        continue;   // Skip invalid line
+                    if (rising_ns && (n <= last_processed_n))
+                        continue;   // Skip already processed n's
+                    if (rising_ns)
+                        fclose(fd); // Unlock the file during the test...
+                    if (!process_num(format, sgk, sgb, n, incr, shift, &res))
+                        goto done;
+                    if (res) {
+                        resultline = IniGetInt(INI_FILE, (char*)"ResultLine", 0);
+                        outfd = _open(outputfile, _O_TEXT | _O_RDWR | _O_APPEND | _O_CREAT, 0666);
+                        if (outfd) {
+                            if (hline >= resultline) {// write the relevant header
+                                writelg = _write(outfd, hbuff, strlen(hbuff));
+                            }
+                            sprintf(outbuf, "%lu\n", n);
+                            writelg = _write(outfd, outbuf, strlen(outbuf));
+                            _close(outfd);
+                        }
+                        IniWriteInt(INI_FILE, (char*)"ResultLine", line);// update the result line
                     }
                 }
                 else if (format == ABCRU)	{
@@ -16379,21 +16430,52 @@ OPENFILE :
                         IniWriteInt (INI_FILE, (char *)"ResultLine", line);	        // update the result line
                     }
                 }
-                else if (format == ABCVARAQS)   {
-                    // k, b, n, c and d specified on each input line
+                else if (format == ABCVARAQS && nargs == 5) {	// k, b, n, c and d specified on each input line
                     if (sscanf (buff+begline, "%s %s %lu %d %s", sgk, sgb, &n, &incr, sgd) != 5)
-                        continue;	// Skip invalid line
+                        continue;   // Skip invalid line
                     if (!isDigitString(sgk))
-                        continue;	// Skip invalid line
+                        continue;   // Skip invalid line
                     if (!isDigitString (sgb))
-                        continue;	// Skip invalid line
-//                    if (!isDigitString(sgd))
-//                        continue;	// Skip invalid line
+                        continue;   // Skip invalid line
+//		    if (!isDigitString(sgd))
+//			continue;   // Skip invalid line
                     if (rising_ns && !rising_ks && (n <= last_processed_n))
-                        continue;	// Skip already processed n's
-                    if (rising_ks && !rising_ns && (digitstrcmp (sgk, last_processed_k) <= 0))
-                        continue;	// Skip already processed k's
+                        continue;   // Skip already processed n's
+                    if (rising_ks && !rising_ns && (digitstrcmp (sgk,
+                        last_processed_k) <= 0))
+                        continue;   // Skip already processed k's
                     if ((rising_ns && !rising_ks) || (!rising_ns && rising_ks))
+                        fclose (fd);    // Unlock the file during the test...
+                    if (! process_num (format, sgk, sgb, n, incr, shift, &res))
+                        goto done;
+                    if (res) {
+                        resultline = IniGetInt(INI_FILE, (char*)"ResultLine", 0);
+                        outfd = _open (outputfile, _O_TEXT | _O_RDWR | _O_APPEND | _O_CREAT, 0666);
+                        if (outfd) {
+                            if (hline >= resultline) {// write the relevant header
+                            writelg = _write (outfd, hbuff, strlen (hbuff));
+                            }
+                            sprintf (outbuf, "%s %s %lu %d %s\n", sgk, sgb, n, incr, sgd); 
+                            writelg = _write (outfd, outbuf, strlen (outbuf));
+                            _close (outfd);
+                        }
+                        IniWriteInt (INI_FILE, (char*)"ResultLine", line);	// update the result line
+                    }
+                }
+                else if (format == ABCVARAQS && nargs == 1) {// Only n specified on each input line.
+                    if (sscanf (buff+begline, "%lu", &n) != 1)
+                        continue;   // Skip invalid line
+                    if (!isDigitString(sgk))
+                        continue;   // Skip invalid line
+                    if (!isDigitString (sgb))
+                        continue;   // Skip invalid line
+//		    if (!isDigitString(sgd))
+//			continue;   // Skip invalid line
+                    if (rising_ns && (n <= last_processed_n))
+                        continue;   // Skip already processed n's
+//		    if (rising_ks && !rising_ns && (digitstrcmp (sgk, last_processed_k) <= 0))
+//			continue;   // Skip already processed k's
+                    if (rising_ns)
                         fclose (fd);// Unlock the file during the test...
                     if (! process_num (format, sgk, sgb, n, incr, shift, &res))
                         goto done;
@@ -16401,15 +16483,14 @@ OPENFILE :
                         resultline = IniGetInt(INI_FILE, (char*)"ResultLine", 0);
                         outfd = _open (outputfile, _O_TEXT | _O_RDWR | _O_APPEND | _O_CREAT, 0666);
                         if (outfd) {
-                            if (hline >= resultline) {
-                                // write the relevant header
-                                wc = _write (outfd, hbuff, strlen (hbuff));
+                            if (hline >= resultline) {	// write the relevant header
+                                writelg = _write (outfd, hbuff, strlen (hbuff));
                             }
-                            sprintf (outbuf, "%s %s %lu %d %s\n", sgk, sgb, n, incr, sgd); 
-                            wc = _write (outfd, outbuf, strlen (outbuf));
+                            sprintf (outbuf, "%lu\n", n); 
+                            writelg = _write (outfd, outbuf, strlen (outbuf));
                             _close (outfd);
-                            }
-                        IniWriteInt (INI_FILE, (char*)"ResultLine", line);	     // update the result line
+                        }
+                        IniWriteInt (INI_FILE, (char*)"ResultLine", line);// update the result line
                     }
                 }
                 else if (format == ABCGM)	{// Gaussian Mersenne

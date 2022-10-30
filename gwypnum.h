@@ -142,7 +142,7 @@ void gwypsetaddinatpowerofb (
 );
 
 void gwypsetmaxmulbyconst(// Set the maximum of the multiplicative constant
-	long
+	unsigned long
 );
 
 void gwypsetmulbyconst(	// Set the multiplicative constant before normalizing
