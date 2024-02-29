@@ -275,6 +275,10 @@ void gwypsetzero (
 	unsigned long
 );
 
+void gwypzero (
+	gwypnum
+);
+
 void	gwypdone (
 void
 );			// Free all the memory used by this code.

@@ -2737,6 +2737,29 @@ lucas_mul(	// Multiplication of large integers ; inputs and output normalized
     return(err);
 }
 
+/* --------- Small service routines  ---------- */
+
+unsigned long ulbitlen (unsigned long b) {
+    unsigned long ki = b, l = 0;
+    while (ki) {
+        l++;
+        ki >>= 1;
+    }
+    return l;
+}
+
+unsigned long ulbitval (unsigned long b, unsigned long index) {
+    unsigned long i, imax, mask = 1;    // mask points on bit 0.
+    imax = ulbitlen (b);
+    if (index > imax)                           // index out of data
+        return (0);
+    for (i = 0; i < index; i++)
+        mask <<= 1;                             // mask points on bit n° index
+    return ((b & mask)!=0);
+}
+
+/* -------------------------------------------- */
+
 /* --------- Initialization routines ---------- */
 
 

@@ -233,6 +233,7 @@ int main (
             printf ("Could not change to the executable directory...\n");
     }
 
+
 /* Process command line switches */
 
 	for (i = 1; i < argc; i++) {
@@ -441,7 +442,7 @@ DIGITSONLY:
 
 		case 'V':
 		case 'v':
-			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.7 ; linked with CUDA Version 8.0.44\n");
+			printf ("Primality Testing of k*b^n+/-1 Program - GPU Version 3.8.8 ; linked with CUDA Version 8.0.44\n");
 			return (0); 
 
 /* -W - use a different working directory */
@@ -502,6 +503,7 @@ DIGITSONLY:
         
 	readIniFiles ();
 
+
 // Copy the options in the init. file
 
 	for (i=0; i< opcnt; i++) {
@@ -543,25 +545,26 @@ DIGITSONLY:
 	readIniFiles ();
         // Read again the init. files, that may have been updated...
 
+
 /* Bring up the main menu */
 
 	if (MENUING)
             main_menu ();
 
+
         cudaGetDeviceCount( &device_count);
         
-        if(CPU_AFFINITY != 99) {
-            device_number = CPU_AFFINITY;
-        
-        if (device_number >= device_count)
-            {
-            printf("device_number = %d >= device_count = %d ... exiting\n", device_number, device_count);
-            exit(2);
-            }
-        }
-            
-        
-        cudaSetDeviceFlags(cudaDeviceBlockingSync);
+        if(CPU_AFFINITY != 99)
+          device_number = CPU_AFFINITY;
+	else
+            device_number = IniGetInt (INI_FILE,(char*) "GPUDEVICE", 0); // JP 29/02/24
+	
+	if (device_number >= device_count) {
+	    printf("device_number = %d >= device_count = %d ... exiting\n", device_number, device_count);
+	    exit(2);
+	}
+
+	cudaSetDeviceFlags(cudaDeviceBlockingSync);
         cudaSetDevice(device_number);
 // From Iain
         cudaGetDeviceProperties(&properties, device_number);

@@ -328,7 +328,7 @@ unsigned int sleep5 = FALSE, showdigits = FALSE;
 unsigned int maxerr_recovery_mode [10] = {0};
 unsigned int lasterr_point = 0;
 unsigned long primolimit = 30000;
-unsigned long ifnear = FALSE;
+unsigned long nextifnear = FALSE;
 unsigned long maxaprcl = 400;
 unsigned long interimFiles, interimResidues, throttle, facfrom, facto;
 unsigned long factored = 0, eliminated = 0;
@@ -423,8 +423,8 @@ char ERRMSG4[] = "Waiting five minutes before restarting.\n";
 char ERRMSG5[] = "Fatal Error, Check Number = %d, test of %s aborted\n";
 char ERRMSG6[] = "For added safety, redoing iteration using a slower, more reliable method.\n";
 char ERRMSG7[] = "Fatal Error, divisibility test of %d^(N-1)-1 aborted\n";
-char ERRMSG8[] = "Unrecoverable error, Restarting with  larger FFT length...\n";
-char ERRMSG9[] = "Too much errors ; Restarting with  larger FFT length...\n";
+char ERRMSG8[] = "Unrecoverable error, Restarting with next larger FFT length...\n";
+char ERRMSG9[] = "Too much errors ; Restarting with next larger FFT length...\n";
 char ERRMSG60[] = "ERROR: Comparing double-check values failed.  Rolling back to iteration %lu.\n";
 char ERRMSG70[] = "ERROR: Comparing Gerbicz checksum values failed.  Rolling back to iteration %lu.\n";
 char ERRMSG80[] = "ERROR: Invalid FFT data.  Restarting from last save file.\n";
@@ -441,35 +441,7 @@ void	trace(int n) {			// Debugging tool...
         OutputStr (buf);
 }
 
-//  giant divg, gcdg and invert functions implementations using GNU MP library functions
-
-void gwypuldivg (unsigned long divisor, giant theg) {
-    mpz_t rop, op1, op2;
-    mpz_init (rop);             // allocate mpz memory
-    mpz_init (op1);
-    mpz_init (op2);
-    gtompz (theg, op1);            // theg ==> op1
-    mpz_set_ui (op2, divisor);
-    mpz_divexact (rop, op1, op2);
-    mpztog (rop, theg);
-    mpz_clear (rop);
-    mpz_clear (op1);
-    mpz_clear (op2);    
-}
-
-void gwypdivg (giant divisor, giant theg) {
-    mpz_t rop, op1, op2;
-    mpz_init (rop);             // allocate mpz memory
-    mpz_init (op1);
-    mpz_init (op2);
-    gtompz (theg, op1);         // theg ==> op1
-    gtompz (divisor,op2);	// divisor ==> op2
-    mpz_divexact (rop, op1, op2);
-    mpztog (rop, theg);		// rop ==> theg
-    mpz_clear (rop);
-    mpz_clear (op1);
-    mpz_clear (op2);    
-}
+//  giant gcd and invert functions implementations using GNU MP library functions
 
 unsigned long gwypgcdui (giant g, unsigned long x) {
     mpz_t rop, op1;
@@ -1429,15 +1401,6 @@ void tempFileName (
     sprintf (buf, "%1c%07i", c, remainder % 10000000); 
 } 
 
-void LtempFileName ( 
-	char	*buf, char *prefix, giant NN) 
-{ 
-	int remainder;
- 
-	remainder = gmodi(19999981, NN);
-	sprintf (buf, "%s%07i", prefix, remainder % 10000000); 
-} 
-
 /* See if the given file exists */
 
 int fileExists (
@@ -1801,8 +1764,7 @@ int write_array (
 	return (TRUE);
 }
 
-//#define CHECKSUM_OFFSET	48	// JP 25/11/23
-#define CHECKSUM_OFFSET	5*sizeof(long)+2*sizeof(double)+12	// JP 27/11/23
+#define CHECKSUM_OFFSET	72
 
 int read_checksum (
 	int	fd,
@@ -1849,28 +1811,29 @@ int read_header (
 	double	k;
 	unsigned long b, n;
 	long	c;
-	char	pad;			// JP 25/11/23
+	char	pad[5];
 	char	stage[11];
 	double	pct_complete;
 	unsigned long trash_sum;
+;
 
 /* Skip past the magic number in the first 4 bytes */
 
 	_lseek (fd, sizeof (uint32_t), SEEK_SET);
 
 /* Read the header */
+
 	if (!read_long298 (fd, version, NULL)) return (FALSE);
 	if (!read_double298 (fd, &k, NULL)) return (FALSE);
 	if (!read_long298 (fd, &b, NULL)) return (FALSE);
 	if (!read_long298 (fd, &n, NULL)) return (FALSE);
 	if (!read_slong (fd, &c, NULL)) return (FALSE);
 	if (!read_array (fd, stage, 11, NULL)) return (FALSE);
-	if (!read_array (fd, &pad, 1, NULL)) return (FALSE);	// JP 25/11/23
+	if (!read_array (fd, pad, 5, NULL)) return (FALSE);
 	if (!read_double298 (fd, &pct_complete, NULL)) return (FALSE);
 	if (sum == NULL) sum = &trash_sum;
-	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);			// JP 25/11/23
-	if (_read (fd, sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
-//	if (!read_checksum (fd, sum)) return (FALSE);
+	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);
+        if (_read (fd, sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
         
 /* Validate the k,b,n,c values */
 
@@ -1895,7 +1858,7 @@ int write_header (
 	unsigned long version,
 	struct work_unit *w)
 {
-	char   pad = 0;		// JP 25/11/23
+	char   pad[5] = {0};
         // to have a header size multiple of 8
 	unsigned long sum = 0;
 
@@ -1906,7 +1869,7 @@ int write_header (
 	if (!write_long298 (fd, w->n, NULL)) return (FALSE);
 	if (!write_slong (fd, w->c, NULL)) return (FALSE);
 	if (!write_array (fd, w->stage, 11, NULL)) return (FALSE);
-	if (!write_array (fd, &pad, 1, NULL)) return (FALSE);		// jp 25/11/23
+	if (!write_array (fd, pad, 5, NULL)) return (FALSE);
 	if (!write_double298 (fd, w->pct_complete, NULL)) return (FALSE);
 //	if (!write_long298 (fd, sum, NULL)) return (FALSE);
 	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);
@@ -3237,9 +3200,7 @@ int areTwoPRPValsEqual (
 
 struct program_state {
 	gwypnum	x;			/* The current value in our left-to-right exponentiation */
-	gwypnum	sqx;			/* sqare root of x */
-	gwypnum	y;			/* used when some interim value is needed. */
-	gwypnum	sqy;			/* sqare root of y */
+	gwypnum	y;					/* used when some interim value is needed. */
 	unsigned long counter;		/* Current "iteration" counter */
 	unsigned long units_bit;	/* For shifting FFT data -- allows more robust double-checking */
 	unsigned long units_bit2;	/* Keep the shift count for y */
@@ -3249,17 +3210,17 @@ struct program_state {
 	int	residue_type;			/* Type of residue to generate (5 different residue types are supported) */
 	int	error_check_type;		/* 0=none, 1=Gerbicz, 2=double-checking */
 	int	state;					/* State variable see definitions below */
-	gwypnum	alt_x;			/* When doing ERRCHK_DBLCHK, this is the alternate x value */
-					/* When doing ERRCHK_GERBICZ, this is the comparison checksum value being calculated */
-	unsigned long alt_units_bit;	/* When doing ERRCHK_DBLCHK, this is the alternate shift count */
-	gwypnum	u0;			/* Saved first value of the Gerbicz checksum function */
-	gwypnum	d;			/* Last computed value of the Gerbicz checksum function */
-	unsigned long L;		/* Iterations between multiplies in computing Gerbicz checksum */
+	gwypnum	alt_x;				/* When doing ERRCHK_DBLCHK, this is the alternate x value */
+								/* When doing ERRCHK_GERBICZ, this is the comparison checksum value being calculated */
+	unsigned long alt_units_bit;/* When doing ERRCHK_DBLCHK, this is the alternate shift count */
+	gwypnum	u0;					/* Saved first value of the Gerbicz checksum function */
+	gwypnum	d;					/* Last computed value of the Gerbicz checksum function */
+	unsigned long L;			/* Iterations between multiplies in computing Gerbicz checksum */
 	unsigned long start_counter;	/* Counter at start of current Gerbicz or double-check block */
-	unsigned long _mul_counter;	/* Counter when  Gerbicz multiply takes place */
+	unsigned long next_mul_counter;	/* Counter when next Gerbicz multiply takes place */
 	unsigned long end_counter;	/* Counter when current Gerbicz or double-check block ends */
-	giant gx;			/* x result of the test in giant form */
-	giant gy;			/* y result of the test in giant form */
+	giant gx;					/* x result of the test in giant form */
+	giant gy;					/* y result of the test in giant form */
 } ps;
 
 #define ERRCHK_NONE		0	/* No high-reliability error-checking */
@@ -3269,7 +3230,7 @@ struct program_state {
 #define STATE_NORMAL				 0	/* Normal left-to-right exponentiation */
 #define STATE_DCHK_PASS1			10	/* Do squarings for a while, then rollback counter and switch to pass 2 */
 #define STATE_DCHK_PASS2			11	/* Do squarings for a while, compare vals, then switch back to pass 1 */
-#define STATE_GERB_START_BLOCK		22	/* Determine how many iters are in the  Gerbicz block */
+#define STATE_GERB_START_BLOCK		22	/* Determine how many iters are in the next Gerbicz block */
 #define STATE_GERB_MID_BLOCK		23	/* Do squarings for L iterations */
 #define STATE_GERB_MID_BLOCK_MULT	24	/* Do checksum multiply after the L-th squaring (except last block) */
 #define STATE_GERB_END_BLOCK		25	/* After L^2 squarings, do alt squarings to compute 2nd Gerbicz compare value */
@@ -3294,7 +3255,7 @@ struct program_state {
 /*	u32		alternate shift count (version number >= 3) */
 /*	u32		L - iterations between Gerbicz multiplies (version number >= 3) */
 /*	u32		error-checking start counter (version number >= 3) */
-/*	u32		error-checking  Gerbicz multiply counter (version number >= 3) */
+/*	u32		error-checking next Gerbicz multiply counter (version number >= 3) */
 /*	u32		error-checking end counter (version number >= 3) */
 /*	gwypnum		FFT data for x (u32 len, array u32s) */
 /*	gwypnum		FFT data for alt_x (u32 len, array u32s) (version number >= 3) */
@@ -3340,12 +3301,10 @@ int writeSaveFile (
 	if (!write_long298 (fd, ps->alt_units_bit, &sum)) goto err;
 	if (!write_long298 (fd, ps->L, &sum)) goto err;
 	if (!write_long298 (fd, ps->start_counter, &sum)) goto err;
-	if (!write_long298 (fd, ps->_mul_counter, &sum)) goto err;
+	if (!write_long298 (fd, ps->next_mul_counter, &sum)) goto err;
 	if (!write_long298 (fd, ps->end_counter, &sum)) goto err;
 	if (!write_gwypnumjp (fd, ps->x, &sum)) goto err;
-	if (!write_gwypnumjp (fd, ps->sqx, &sum)) goto err;
 	if (!write_gwypnumjp (fd, ps->y, &sum)) goto err;
-	if (!write_gwypnumjp (fd, ps->sqy, &sum)) goto err;
 
 	if (ps->state != STATE_NORMAL && ps->state != STATE_GERB_MID_BLOCK && ps->state != STATE_GERB_MID_BLOCK_MULT) {
             if (!write_gwypnumjp (fd, ps->alt_x, &sum)) goto err;
@@ -3384,7 +3343,7 @@ int writeSaveFile (
 	
 	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);
 	if (_write (fd, &sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
-//	if (!write_checksum (fd, sum)) return (FALSE); // JP 27/11/23
+
 	closeWriteSaveFile (write_save_file_state, fd);
 	return (TRUE);
 
@@ -3407,7 +3366,7 @@ int readPRPSaveFile (
 	if (fd <= 0) return (FALSE);
 	if (!read_magicnum (fd, PRP_MAGICNUM)) goto err;
         ner=1;
-    	if (!read_header (fd, &version, w, &filesum)) goto err;
+	if (!read_header (fd, &version, w, &filesum)) goto err;
         ner=2;
 	if (version == 0 || version > PRP_VERSION) goto err;
         ner=3;
@@ -3462,10 +3421,10 @@ int readPRPSaveFile (
         ner=17;
 		if (!read_long298 (fd, &ps->start_counter, &sum)) goto err;
         ner=18;
-		if (!read_long298 (fd, &ps->_mul_counter, &sum)) goto err;
+		if (!read_long298 (fd, &ps->next_mul_counter, &sum)) goto err;
         ner=19;
 		if (!read_long298 (fd, &ps->end_counter, &sum)) goto err;
-       ner=20;
+        ner=20;
 	}
 
 	// In version 3, we did not delay the final multiply in calculation of checksum #1.
@@ -3478,12 +3437,8 @@ int readPRPSaveFile (
 	// All PRP states wrote an x value
 	if (!read_gwypnumjp (fd, ps->x, &sum)) goto err;
         ner=22;
-	if (!read_gwypnumjp (fd, ps->sqx, &sum)) goto err;
-        ner=23;
 	if (!read_gwypnumjp (fd, ps->y, &sum)) goto err;
-        ner=24;
-	if (!read_gwypnumjp (fd, ps->sqy, &sum)) goto err;
-        ner=25;
+        ner=23;
 
 	// In version 3, we only wrote x to the save file at Gerbicz start block.  In version 4, we write x and the
 	// identical alt_x.  There is added error protection by always having at least two gwypnum values in memory.
@@ -3493,30 +3448,31 @@ int readPRPSaveFile (
 	}
 	else if (ps->state != STATE_NORMAL && ps->state != STATE_GERB_MID_BLOCK && ps->state != STATE_GERB_MID_BLOCK_MULT) {
             if (!read_gwypnumjp (fd, ps->alt_x, &sum)) goto err;
-            ner=26;
+            ner=24;
 	}
 
 	// Most PRP Gerbicz states wrote a u0 value
 	if (ps->state != STATE_NORMAL && ps->state != STATE_DCHK_PASS1 && ps->state != STATE_DCHK_PASS2 &&
 	    ps->state != STATE_GERB_START_BLOCK && ps->state != STATE_GERB_FINAL_MULT) {
             if (!read_gwypnumjp (fd, ps->u0, &sum)) goto err;
-            ner=27;
+            ner=25;
 	}
+
 	// Most PRP Gerbicz states wrote a d value
 	if (ps->state != STATE_NORMAL && ps->state != STATE_DCHK_PASS1 && ps->state != STATE_DCHK_PASS2 &&
 	    ps->state != STATE_GERB_START_BLOCK) {
             if (!read_gwypnumjp (fd, ps->d, &sum)) goto err;
-            ner=28;
+            ner=26;
 	}
 	
 /* Read the five timers and their status, and restart them! */
 
 	for (i=0; i<5; i++) {
 		if (! read_double (fd, &gwyptimers[i], (long*)&sum)) goto err;
-        ner=29;
+        ner=27;
 		if (! read_double (fd, &gwyptimers[i+5], (long*)&sum)) goto err;
 		gwypstart_timer (i);
-        ner=30;
+        ner=28;
 	}
 
 	// Validate checksum and return
@@ -3870,7 +3826,7 @@ int isPRPg (
 		gshiftleft (w->n, kbnc);
 		iaddg (w->c, kbnc);
 		gtog (kbnc, known_factors);
-		gwypdivg (N, known_factors);
+		divg (N, known_factors);
 		iaddg (-1, known_factors);
 		itog (prp_base, compare_val);
 		powermodg (compare_val, known_factors, kbnc);
@@ -4161,7 +4117,7 @@ int isexpdiv (
         }
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
         if (interimResidues && bit % interimResidues < 2) {
@@ -4281,7 +4237,7 @@ error:
         _unlink (filename);
         if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
             IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);
-                // Point on the  line
+                // Point on the next line
             return (FALSE);
         }
         else
@@ -4330,10 +4286,9 @@ int GerbiczTest (
 	int	have_res2048;
 	unsigned long final_counter_y, max_counter, gerb_counter, loopshift = 0, last_counter = 0xFFFFFFFF;	/* Iteration of last error */
 	long	/*stop_counter = 0,*/ restart_counter = -1;	/* On a restart, this specifies how far back to rollback save files */
-	giant	exp, tmp, tmp2, tmp3, tmp4, tmp5; 
-	mpz_t sqrtm1modProth;		// J.P. 17/08/23
+	giant	exp, tmp, tmp2, tmp3; 
 //	struct	program_state ps;
-	int	interim_counter_off_one, interim_mul, PositiveResult, sign;
+	int	interim_counter_off_one, interim_mul, PositiveResult;
 	int	first_iter_msg, echk, gpuflag = 3, iters_left = 0; 
 	double	inverse_explen;
 	double	reallyminerr = 1.0; 
@@ -4344,13 +4299,12 @@ int GerbiczTest (
 		fft_desc[256], res2048[513]; 
 	long	write_time = DISK_WRITE_TIME * 60; 
 //	int	string_rep_truncated;
-	int	error_count_messages, stop_reason = FALSE;
-	gwypnum sqR;
+	int	error_count_messages/*, zeroed_d = FALSE*/;
 //	readSaveFileState read_save_file_state; /* Manage savefile names during reading */
 	writeSaveFileState write_save_file_state; /* Manage savefile names during writing */
 	
 /* Init program state */
-	memset (&ps, 0, sizeof (ps));
+        memset (&ps, 0, sizeof (ps));
         if (w->prp_base)
 		ps.prp_base = w->prp_base;
 	else
@@ -4390,22 +4344,18 @@ int GerbiczTest (
 	if (errchk == 3) ps.error_check_type = ERRCHK_DBLCHK;
 
 /* Calculate the exponent we will use to do our left-to-right binary exponentiation */
-	
+
 	if (ps.residue_type == GMN_TYPE) {
 		exp = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
 		tmp = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
 		tmp2 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
-		tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);// 18/11/23
-		tmp4 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);// 18/11/23
 	}
 	else {
 		exp = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 		tmp = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 		tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-		tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// 18/11/23
-		tmp4 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// 18/11/23
 	}
-	nbllr_mallocs+=5; // 18/11/23
+	nbllr_mallocs+=3;
 
 /* As a small optimization, base 2 numbers are computed as a^(k*2^n) or a^(k*2^(n-1)) mod N with the final result */
 /* multiplied by a^(c-1).  This eliminates tons of mul-by-consts at the expense of lots of bookkeepping headaches */
@@ -4448,7 +4398,6 @@ int GerbiczTest (
 
         explen = Nlen = bitlen (exp);
 	final_counter = explen - 1;
-	sign = (((w->n&7) == 3) || ((w->n&7) == 5))? 1 : 0;	// 1 if positive, 0 if negative
 	final_counter_y = (final_counter/2)-1;	// Warning : ps.counter starts from 0 !
 	if (ps.error_check_type == ERRCHK_GERBICZ) // 14/04/21
             gerb_counter = final_counter-1049;  // max of L + min of iters_left 13/04/21
@@ -4459,14 +4408,8 @@ int GerbiczTest (
 
 	ps.x = gwypalloc ();
         nbllr_mallocs++;
-	ps.sqx = gwypalloc ();
-        nbllr_mallocs++;
 	ps.y = gwypalloc ();
         nbllr_mallocs++;
-	ps.sqy = gwypalloc ();
-        nbllr_mallocs++;
-	gwypzero (ps.sqx);	// JP 26/11/23
-	gwypzero (ps.sqy);	// JP 26/11/23
 	if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
             ps.alt_x = gwypalloc ();
             nbllr_mallocs++;
@@ -4482,11 +4425,11 @@ int GerbiczTest (
 
 	if (ps.counter == 0) {
             if (ps.residue_type == GMN_TYPE)
-                tmp5 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
+                tmp3 = newgiant (4*FFTLEN*sizeof(double)/sizeof(short) + 16);
             else
-                tmp5 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
+                tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
             nbllr_mallocs++;
-            itog (ps.prp_base, tmp5);
+            itog (ps.prp_base, tmp3);
             /* For base==2 numbers, k==1 and abs(c)==1 we support FFT data shifting */
             if (w->b==2 && (w->k==1.0) && (abs(w->c)==1) && w->n>1000 && IniGetInt
                 (INI_FILE, (char*)"Shifting", 1)) {
@@ -4497,17 +4440,15 @@ int GerbiczTest (
                 init_units_bit = IniGetInt (INI_FILE, (char*)"InitialShiftCount", init_units_bit);
                 // Initial shift count can't be larger than n-64 (the -64 avoids wraparound in setting intial value)
                 init_units_bit = init_units_bit % (maxbitsinfftlen/2 - 64);
-                gshiftleft (init_units_bit, tmp5);
+                gshiftleft (init_units_bit, tmp3);
                 ps.units_bit = ps.alt_units_bit = init_units_bit;
             } else {
                 ps.units_bit = ps.alt_units_bit = init_units_bit = 0;
             }
-            gianttogwyp (tmp5, ps.x);
-            free (tmp5);
+            gianttogwyp (tmp3, ps.x);
+            free (tmp3);
             nbllr_frees++;
             gwypcopy (ps.x, ps.y);	// temporary...
-	    gwypcopy (ps.x, ps.sqx);	// temporary...
-	    gwypcopy (ps.x, ps.sqy);	// temporary...
             ps.units_bit2 = 0;
 
 /* The easy state case is no high-reliability error-checking */
@@ -4519,7 +4460,7 @@ int GerbiczTest (
 			ps.alt_units_bit = ps.units_bit; // JP
 		}
 
-/* The  easiest case is double-the-work error-checking comparing residues at specified intervals */
+/* The next easiest case is double-the-work error-checking comparing residues at specified intervals */
 
 		else if (ps.error_check_type == ERRCHK_DBLCHK) {
 			ps.state = STATE_DCHK_PASS1;
@@ -4603,7 +4544,7 @@ int GerbiczTest (
 	tempFileName (filename, 'z', N);
         if (!quotient)
             strcpy (string_rep, str);
-
+        
 /* Init the write save file state.  This remembers which save files are Gerbicz-checked.  Do this initialization */
 /* before the restart for roundoff errors so that error recovery does not destroy thw write save file state. */
 
@@ -4621,19 +4562,6 @@ int GerbiczTest (
 			first_iter_msg = TRUE;
 		bit = ps.counter+1;
 		pct = trunc_percent (bit * 100.0 / Nlen);
-/*		if (!stop_reason) {	// so it is an error recovery...
-                        if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
-                            gwypfree (ps.alt_x);
-                            nbllr_frees++;
-                        }
-                        if (ps.error_check_type == ERRCHK_GERBICZ) {
-                            gwypfree(ps.u0);
-                            nbllr_frees++;
-                            gwypfree(ps.d);
-                            nbllr_frees++;
-                        }
-		}*/
-		stop_reason = FALSE;
 		if (ps.residue_type == PROTH_TYPE || ps.residue_type == GMN_TYPE)
 			sprintf (fmt_mask,
 				"Resuming Proth prime test of %%s at bit %%ld [%%.%df%%%%]\n",
@@ -4719,7 +4647,7 @@ int GerbiczTest (
 		gwypnum	x;  /* Pointer to number to square */
 		unsigned long *units_bit;
                             /* Pointer to units_bit to update */
-		int	saving, saving_highly_reliable, /*sending_residue, */interim_residue, interim_file;
+		int	saving, saving_highly_reliable, /*sending_residue, */interim_residue, interim_file, stop_reason;
 		int	actual_frequency;
 
 /* If this is the first iteration of a Gerbicz error-checking block, then */
@@ -4752,7 +4680,7 @@ int GerbiczTest (
 				if (gerbicz_block_size > iters_left) gerbicz_block_size = iters_left;
 				ps.L = (unsigned long) sqrt ((double) gerbicz_block_size);
 				ps.start_counter = ps.counter;
-				ps._mul_counter = ps.counter + ps.L;
+				ps.next_mul_counter = ps.counter + ps.L;
 				ps.end_counter = ps.counter + ps.L * ps.L;
 				gwypswap (ps.alt_x, ps.u0);		// Set u0 to a copy of x
 //				gwypcopy (ps.alt_x, ps.u0);		// Set u0 to a copy of x
@@ -4769,7 +4697,7 @@ int GerbiczTest (
 /* (we don't do the iteration immediately before because a save operation may change the FFT data and make */
 /* the error non-reproducible), and finally save if the save file timer has gone off. */
 		stop_reason = stopCheck ();
-		saving = stop_reason || (ps.counter == 0) || (ps.counter == last_counter-8) || (ps.counter == last_counter);	// JP 05/12/23
+		saving = stop_reason || (ps.counter == last_counter-8) || (ps.counter == last_counter);
 		saving_highly_reliable = FALSE;
 
 /* Round off error check the first and last 50 iterations, before writing a save file, near an FFT size's limit, */
@@ -4815,7 +4743,7 @@ int GerbiczTest (
                             cuda_gwypmul (ps.u0, ps.alt_x, 3);	/* Multiply to calc checksum #2. */
 			x = ps.alt_x;	/* Set pointer for checking roundoff errors, sumouts, etc. */
 		} else if (ps.state == STATE_GERB_FINAL_MULT) {
-			gwypcopy (ps.x, ps.u0);	// Copy x (before using it) for  Gerbicz block
+			gwypcopy (ps.x, ps.u0);	// Copy x (before using it) for next Gerbicz block
 			gwypsetnormroutine (0, 1, 0);	/* Always roundoff error check multiplies */
                         if (cufftonly)
                             gwypmul (ps.x, ps.d);
@@ -4845,11 +4773,6 @@ int GerbiczTest (
 /* carefully during an error recovery. This will protect us from roundoff */
 /* errors up to (1.0 - 0.40625). */
 
-			if (ps.counter == (final_counter-1)) {
-			    if(ps.state == STATE_NORMAL || ps.state == STATE_DCHK_PASS1 || ps.state == STATE_GERB_MID_BLOCK) // Be sure it is not an error checking iteration!
-				gwypcopy (x, ps.sqx);
-				// save sqrt (-1) modulo a Proth prime 29/07/23
-			}
 			if (bitval (exp, final_counter-ps.counter-1)) {
 				gwypsetnormroutine (0, echk, 1);
 			} else {
@@ -4890,7 +4813,7 @@ int GerbiczTest (
                             }
                             else if ((ps.error_check_type == ERRCHK_DBLCHK) && (ps.counter == (ps.end_counter-1)))
                                 gpuflag = 2;
-                            else if (/*(ps.error_check_type == ERRCHK_GERBICZ) &&*/ (ps.counter==(ps._mul_counter-1)))
+                            else if (/*(ps.error_check_type == ERRCHK_GERBICZ) &&*/ (ps.counter==(ps.next_mul_counter-1)))
                                 gpuflag = 2;
                             else if ((ps.error_check_type == ERRCHK_GERBICZ) && (ps.counter>(gerb_counter-1)))
                                 gpuflag = 2;
@@ -4910,16 +4833,11 @@ int GerbiczTest (
 			if (*units_bit > ((ps.residue_type == GMN_TYPE)?2*(w->n):w->n)) {
 				*units_bit -= (ps.residue_type == GMN_TYPE)?2*(w->n):w->n;
 			}
-			if (ps.residue_type == GMN_TYPE) {
-			    if (ps.counter == (final_counter_y))	{
+			if ((ps.residue_type == GMN_TYPE) && (ps.counter == final_counter_y)) {
 				gwypcopy (x, ps.y);
 				ps.units_bit2 = *units_bit;
 				loopshift = final_counter_y;
 				max_counter = final_counter;
-			    }
-			    else if (ps.counter == (final_counter_y - 1))
-				if(ps.state == STATE_NORMAL || ps.state == STATE_DCHK_PASS1 || ps.state == STATE_GERB_MID_BLOCK) // Be sure it is not an error checking iteration!
-				    gwypcopy (x, ps.sqy);
 			}
 
 		}
@@ -5094,11 +5012,11 @@ int GerbiczTest (
 		}
 
 /* If double-checking, at end of pass 1 rollback counter and start computing alt_x. */
-/* If double-checking, at end of pass 2 compare values and move onto  block. */
+/* If double-checking, at end of pass 2 compare values and move onto next block. */
 
 		if (ps.state == STATE_DCHK_PASS1) {
 			if (ps.counter < ps.end_counter)
-				;   // Do  iteration
+				;   // Do next iteration
 			else if (ps.counter == ps.end_counter) {
                                     // Switch to alt_x computations
 				ps.state = STATE_DCHK_PASS2;
@@ -5114,7 +5032,7 @@ int GerbiczTest (
 
 		if (ps.state == STATE_DCHK_PASS2) {
 			if (ps.counter < ps.end_counter)
-                                ;   // Do  iteration
+                                ;   // Do next iteration
 			else if (ps.counter == ps.end_counter) {
  				if (!areTwoPRPValsEqual ( (ps.residue_type == GMN_TYPE)?2*(w->n):w->n, ps.x, ps.units_bit, ps.alt_x, ps.alt_units_bit)) {
 					sprintf (buf, ERRMSG60, ps.start_counter);
@@ -5124,7 +5042,7 @@ int GerbiczTest (
 					sleep5 = FALSE;
 					goto restart;
 				}
-				/* If doing a full double-check, start  block of iterations */
+				/* If doing a full double-check, start next block of iterations */
 				if (ps.error_check_type == ERRCHK_DBLCHK) {
 					ps.state = STATE_DCHK_PASS1;
 					ps.start_counter = ps.counter;
@@ -5134,7 +5052,7 @@ int GerbiczTest (
                                         }
 				}
 				/* Otherwise, we're doing the first or last few iterations of a Gerbicz error-check. */
-				/* Set state to start  Gerbicz block (in case we just computed prp_base^k). */
+				/* Set state to start next Gerbicz block (in case we just computed prp_base^k). */
 				else {
                                     ps.state = STATE_GERB_START_BLOCK;
 				}
@@ -5162,16 +5080,16 @@ int GerbiczTest (
 		// Just did a normal PRP squaring
 
 		if (ps.state == STATE_GERB_MID_BLOCK) {
-			if (ps.counter < ps._mul_counter)
+			if (ps.counter < ps.next_mul_counter)
                             ;
-						// Do  iteration
+						// Do next iteration
 			else if (ps.counter == ps.end_counter) {	// Delay last checksum #1 multiply, start checksum #2 calculation
 				if (IniGetInt (INI_FILE, (char*)"GerbiczVerbosity", 1) > 1) OutputStr ((char*)"Start Gerbicz error check.\n");
 				// At end of Gerbicz block, switch to "L" squarings of alt_x to create Gerbicz checksum #2 value
 				gwypcopy (ps.d, ps.alt_x);	// Copy d[t-1] to alt_x
 				ps.state = STATE_GERB_END_BLOCK;	// Squaring alt_x state
 				ps.counter -= ps.L;			// L squarings
-			} else if (ps.counter == ps._mul_counter) {	// Do a checksum #1 multiply 
+			} else if (ps.counter == ps.next_mul_counter) {	// Do a checksum #1 multiply next
 				// Back counter up by one and do one multiply in the computation of Gerbicz checksum #1 value
 				ps.state = STATE_GERB_MID_BLOCK_MULT;
 				ps.counter -= 1;
@@ -5190,7 +5108,7 @@ int GerbiczTest (
 		else if (ps.state == STATE_GERB_MID_BLOCK_MULT) {
 			if (ps.counter < ps.end_counter) {		// In middle of Gerbicz block, do another "L" squarings
 				ps.state = STATE_GERB_MID_BLOCK;
-				ps._mul_counter += ps.L;
+				ps.next_mul_counter += ps.L;
 			} else {					// Can't happen
 				OutputBoth (ERRMSG9);
 				inc_error_count (6, &ps.error_count);
@@ -5203,8 +5121,8 @@ int GerbiczTest (
 		// Just did a checksum #2 squaring
 		else if (ps.state == STATE_GERB_END_BLOCK) {
 			if (ps.counter < ps.end_counter)
-				;		// Do  iteration in computing checksum #2
-			else if (ps.counter == ps.end_counter) {	//  do final multiply in computing checksum #2
+				;		// Do next iteration in computing checksum #2
+			else if (ps.counter == ps.end_counter) {	// Next do final multiply in computing checksum #2
 				ps.state = STATE_GERB_END_BLOCK_MULT;
 				ps.counter -= 1;
 			} else {					// Can't happen
@@ -5218,7 +5136,7 @@ int GerbiczTest (
 
 		// Just did the checksum #2 multiply at the end of L checksum #2 squarings
 		else if (ps.state == STATE_GERB_END_BLOCK_MULT) {
-			if (ps.counter == ps.end_counter) {		//  do final multiply in computing checksum #1
+			if (ps.counter == ps.end_counter) {		// Next do final multiply in computing checksum #1
 				ps.state = STATE_GERB_FINAL_MULT;
 				ps.counter -= 1;
 			} else {					// Can't happen
@@ -5241,7 +5159,7 @@ int GerbiczTest (
 			if (!areTwoPRPValsEqual ((ps.residue_type == GMN_TYPE)?2*(w->n):w->n, ps.alt_x, 0, ps.d, 0)) {
 				sprintf (buf, ERRMSG70, ps.start_counter);
 				OutputBoth (buf);
-				gerbicz_block_size_adjustment *= 0.25;		/* This will halve  L */
+				gerbicz_block_size_adjustment *= 0.25;		/* This will halve next L */
 				if (gerbicz_block_size_adjustment < 0.001) gerbicz_block_size_adjustment = 0.001;
 				IniWriteFloat (INI_FILE, "PRPGerbiczCompareIntervalAdj", (float) gerbicz_block_size_adjustment);
 				inc_error_count (7, &ps.error_count);
@@ -5269,7 +5187,7 @@ int GerbiczTest (
 			gerbicz_block_size_adjustment *= 1.0473;		/* 30 good blocks to double L */
 			if (gerbicz_block_size_adjustment > 1.0) gerbicz_block_size_adjustment = 1.0;
 			IniWriteFloat (INI_FILE, "PRPGerbiczCompareIntervalAdj", (float) gerbicz_block_size_adjustment);
-			/* Start  Gerbicz block.  Both x and alt_x must be identical at start of  block. */
+			/* Start next Gerbicz block.  Both x and alt_x must be identical at start of next block. */
 			ps.state = STATE_GERB_START_BLOCK;
 			gwypswap (ps.alt_x, ps.u0);
 			ps.alt_units_bit = ps.units_bit;
@@ -5302,7 +5220,7 @@ int GerbiczTest (
 /* If an escape key was hit, write out the results and return */
 
 		if (stop_reason) {
-//			stop_reason = FALSE;
+			stop_reason = FALSE;
 //                        stop_counter = ps.counter;
 			if (ps.residue_type == PROTH_TYPE || ps.residue_type == GMN_TYPE)
 				sprintf (buf, "Stopping Proth prime test of %s at iteration %ld [%.*f%%]\n",
@@ -5383,10 +5301,6 @@ int GerbiczTest (
         
 /* Restaure the default adjustment, and free up some memory */
 
-//	if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
-//	    gwypfree (ps.alt_x);
-//	    nbllr_frees++;
-//	}
 	if (ps.error_check_type == ERRCHK_GERBICZ) {
             IniWriteFloat (INI_FILE, "PRPGerbiczCompareIntervalAdj", 1.0);
             gwypfree (ps.u0);
@@ -5485,217 +5399,43 @@ int GerbiczTest (
 			sleep5 = TRUE;
 			goto restart;
 		}
-		if (ps.error_check_type == ERRCHK_GERBICZ || ps.error_check_type == ERRCHK_DBLCHK) {
+		
 		gwypfree (ps.alt_x);
-		nbllr_frees++;
-		}
+                nbllr_frees++;
 	}
+
 	if (ps.residue_type == GMN_TYPE) {
-		sqR = gwypalloc ();
-		nbllr_mallocs++;
 		ps.gx = tmp;
+                
 		if (gwyptogiant (ps.y, tmp2)) {
 			OutputBoth (ERRMSG8);
 			inc_error_count (2, &ps.error_count);
-			restart_counter = -1;	/* rollback to any save file */
+			restart_counter = -1;
+                            /* rollback to any save file */
 			sleep5 = TRUE;
 			goto restart;
 		}
+		
 		rotategp (tmp2, (ps.residue_type == GMN_TYPE)?2*(w->n):w->n, ps.units_bit2);
 		ps.gy = tmp2;
-		gtog (ps.gx, tmp3);
-		modg (M, tmp3);
-		gtog (ps.gy, tmp4);
-		modg (M, tmp4);
-		if (sign) {
-		    mulg (tmp4, tmp3);
-		    modg (N, tmp3);
-		    iaddg (1, tmp3);	// Compute the (unnormalized) residue
-//		    if (gcompg (N, tmp3) != 0) 
-//			OutputBoth ("\nProth Error for sign = PLUS.\n");
-		}
-		else {
-		    gwypinvg (N, tmp4);
-		    mulg (tmp4, tmp3);
-		    modg (N, tmp3);
-		    iaddg (1, tmp3);	// Compute the (unnormalized) residue                
-//		    if (gcompg (N, tmp3) != 0) 
-//			OutputBoth ("\nProth Error for sign = MINUS.\n");
-		}
-		if (gcompg (N, tmp3) == 0) {	// if Positive result
-		    char mpztxtfilename[40], mpzfilename[40], gfilename[40],  *mpzchain;
-		    int mpzbase;
-		    FILE *fout, *foutr;
-		    gwyptogiant (ps.sqx, tmp3);
-		    modg (M, tmp3);
-		    gwyptogiant (ps.sqy, tmp4);
-		    modg (M, tmp4);
-		    if (sign) {
-			mulg (tmp4, tmp3);
-			modg (N, tmp3);
-		    }
-		    else {
-			gwypinvg (N, tmp4);
-			mulg (tmp4, tmp3);
-			modg (N, tmp3);
-		    }
-		    LtempFileName (mpztxtfilename, (char*)"tsqrtm1_", N);
-		    LtempFileName (mpzfilename, (char*)"zsqrtm1_", N);
-		    LtempFileName (gfilename, (char*)"gsqrtm1_", N);
-		    if ((IniGetInt (INI_FILE, (char*)"Svgsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Prtsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Svtsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Svzsqrtm1", 0))) {
-			int ysign;
-			mpz_t mpzsqrtm1modProth;
-			mpz_init (mpzsqrtm1modProth);
-			gtompz (tmp3, mpzsqrtm1modProth);
-			ysign = tmp3->sign;
-			squareg (tmp3);		// Verification 30/07/23
-			iaddg (1,tmp3);
-			modg (N, tmp3);
-			if (isZero(tmp3)) {	// Verification OK!
-			    mpztog (mpzsqrtm1modProth, tmp3);	// Restore the result sqR.
-			    if (IniGetInt (INI_FILE, (char*)"Svgsqrtm1", 0)) {
-				gianttogwyp (tmp3, sqR);
-				writeToFile (gfilename, ps.counter, sqR, NULL);
-			    }
-			    if (mpzbase = IniGetInt (INI_FILE, (char*)"Prtsqrtm1", 0)) {
-				if (mpzbase == 1) {
-				    sprintf (res64, "%08lX%08lX", (unsigned long) ((ysign > 1) ? tmp3->n[1] : 0), (unsigned long) tmp3->n[0]);
-				    sprintf (buf,"\nsqrt(-1) mod N res64 = %s\n", (ysign)? res64:"0");
-				    OutputStr(buf);
-				}
-				else if (mpzbase <= 36) {
-				    mpzchain = (char*)malloc (mpz_sizeinbase(mpzsqrtm1modProth, mpzbase	)+2);
-				    mpz_get_str (mpzchain, mpzbase, mpzsqrtm1modProth);
-				    printf ("\n%s\n", mpzchain);
-				    free (mpzchain);
-				}
-				else {
-				    sprintf (buf, "%d : base too large, conversion not done for printing \n", mpzbase);
-				    OutputStr(buf);
-				}
-			    }		// End Prtsqrtm1
-			    if (mpzbase = IniGetInt (INI_FILE, (char*)"Svtsqrtm1", 0)) {
-				if (mpzbase < 2) {
-				    sprintf (buf, "%d : base too small, conversion not done for saving.\n", mpzbase);
-				    OutputStr(buf);				
-				}
-				else if (mpzbase <= 36) {
-				    mpzchain = (char*)malloc (mpz_sizeinbase(mpzsqrtm1modProth, mpzbase)+2);
-				    mpz_get_str(mpzchain, mpzbase, mpzsqrtm1modProth);
-				    fout = fopen  (mpztxtfilename, "w");
-				    fprintf(fout, "%s\n", mpzchain);
-				    fclose(fout);
-				    free (mpzchain);
-				}
-				else {
-				    sprintf (buf, "%d : base too large, conversion not done for saving.\n", mpzbase);
-				    OutputStr(buf);
-				}
-			    }	// End Svtsqrtm1
-			    if (IniGetInt (INI_FILE, (char*)"Svzsqrtm1", 0)) {
-				foutr = fopen ( mpzfilename, "w");
-				if (!__gmpz_out_raw(foutr, mpzsqrtm1modProth)) {
-				    sprintf(buf, "mpz_out_raw : disk output error.\n");
-				    OutputStr(buf);
-				}
-				else
-				    fclose(foutr);			
-			    }		    
-			}
-			else  {
-			    sprintf (buf, "\nERROR, sqR != sqrt(-1) modulo %s.\n", string_rep);
-			    OutputBoth (buf);
-			}
-			mpz_clear (sqrtm1modProth);
-		}
-	    }
 
-		/* Delete the continuation files. */
+		gwypfree (ps.x);
+                nbllr_frees++;
+		gwypfree (ps.y);
+                nbllr_frees++;
+                 
+	/* Delete the continuation files. */
 
 		unlinkSaveFiles (&write_save_file_state);
-		gwypfree (sqR);
-		nbllr_frees++;
+	
 	}
 	else {
 
 		/* Print results */
 
-	    if (PositiveResult) {
-		char mpztxtfilename[40], mpzfilename[40], gfilename[40],  *mpzchain;
-		int mpzbase;
-		FILE *fout, *foutr;
-		LtempFileName (mpztxtfilename, (char*)"tsqrtm1_", N);
-		LtempFileName (mpzfilename, (char*)"zsqrtm1_", N);
-		LtempFileName (gfilename, (char*)"gsqrtm1_", N);
-		if (ps.residue_type == PROTH_TYPE) {
-		    if ((IniGetInt (INI_FILE, (char*)"Svgsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Prtsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Svtsqrtm1", 0))||(IniGetInt (INI_FILE, (char*)"Svzsqrtm1", 0))) {
-		    int ysign;
-		    mpz_t mpzsqrtm1modProth;
-		    mpz_init (mpzsqrtm1modProth);
-		    gwyptogiant (ps.sqx, tmp3);
-		    gtompz (tmp3, mpzsqrtm1modProth);
-		    ysign = tmp3->sign;
-		    squareg (tmp3);		// Verification 30/07/23
-		    iaddg (1,tmp3);
-		    modg (N, tmp3);
-		    if (isZero(tmp3)) {		// Verification OK!
-			if (IniGetInt (INI_FILE, (char*)"Svgsqrtm1", 0))
-			    writeToFile (gfilename, ps.counter, ps.sqx, NULL);
-			if (mpzbase = IniGetInt (INI_FILE, (char*)"Prtsqrtm1", 0)) {
-			    if (mpzbase == 1) {
-				gwyptogiant (ps.sqx, tmp3);
-				sprintf (res64, "%08lX%08lX", (unsigned long) ((ysign > 1) ? tmp3->n[1] : 0), (unsigned long) tmp3->n[0]);
-				sprintf (buf,"\nsqrt(-1) mod N res64 = %s\n", (ysign)? res64:"0");
-				OutputStr(buf);
-			    }
-			    else if (mpzbase <= 36) {
-				mpzchain = (char*)malloc (mpz_sizeinbase(mpzsqrtm1modProth, mpzbase)+2);
-				mpz_get_str (mpzchain, mpzbase, mpzsqrtm1modProth);
-				printf ("\n%s\n", mpzchain);
-				free (mpzchain);
-			    }
-			    else {
-				sprintf (buf, "%d : base too large, conversion not done for printing \n", mpzbase);
-				OutputStr(buf);
-			    }
-			}	// End Prtsqrtm1
-			if (mpzbase = IniGetInt (INI_FILE, (char*)"Svtsqrtm1", 0)) {
-			    if (mpzbase < 2) {
-				sprintf (buf, "%d : base too small, conversion not done for saving.\n", mpzbase);
- 				OutputStr(buf);				
-			    }
-			    else if (mpzbase <= 36) {
-				mpzchain = (char*)malloc (mpz_sizeinbase(mpzsqrtm1modProth, mpzbase)+2);
-				mpz_get_str(mpzchain, mpzbase, mpzsqrtm1modProth);
-				fout = fopen  (mpztxtfilename, "w");
-//				__gmpz_out_str(fout, mpzbase, mpzsqrtm1modProth);
-				fprintf(fout, "%s\n", mpzchain);
-				fclose(fout);
-				free (mpzchain);
-			    }
-			    else {
-				sprintf (buf, "%d : base too large, conversion not done for saving.\n", mpzbase);
-				OutputStr(buf);
-			    }
-			}	// End Svtsqrtm1
-			if (IniGetInt (INI_FILE, (char*)"Svzsqrtm1", 0)) {
-			    foutr = fopen ( mpzfilename, "w");
-				if (!__gmpz_out_raw(foutr, mpzsqrtm1modProth)) {
-					sprintf(buf, "mpz_out_raw : disk output error.\n");
-					OutputStr(buf);
-				}
-				else
-					fclose(foutr);
-			
-			}		    
-		    }
-		    else  {
-		    sprintf (buf, "\nERROR, y != sqrt(-1) modulo %s.\n", string_rep);				OutputBoth (buf);
-		    }
-		    mpz_clear (sqrtm1modProth);
-		    }
-		    sprintf (buf, "%s is prime", string_rep);
-		}   // End Proth Type
+		if (PositiveResult) {
+			if (ps.residue_type == PROTH_TYPE)
+				sprintf (buf, "%s is prime", string_rep);
 			else	if (ps.residue_type == PRP_TYPE_SPRP) {
 				sprintf (buf, "%s is a Strong Probable prime", string_rep);
 				if (ps.prp_base != 3)
@@ -5745,6 +5485,17 @@ int GerbiczTest (
 
 		clearline (100);
 
+		free (tmp);
+                nbllr_frees++;
+		free (tmp2);
+                nbllr_frees++;
+		gwypfree (ps.x);
+                nbllr_frees++;
+		gwypfree (ps.y);
+                nbllr_frees++;
+                free (exp);
+                nbllr_frees++;
+
 
 #if defined(WIN32) && !defined(_CONSOLE)
 
@@ -5783,26 +5534,7 @@ int GerbiczTest (
 /* Cleanup and return */
 
 	}
-	if (ps.residue_type != GMN_TYPE) {
-	    free (tmp);		// that is ps.gx
-	    nbllr_frees++;
-	    free (tmp2);	// that is ps.gy
-	    nbllr_frees++;
-	}
-	free (tmp3);
-	nbllr_frees++;
-	free (tmp4);
-	nbllr_frees++;
-	gwypfree (ps.x);
-	nbllr_frees++;
-	gwypfree (ps.y);
-	nbllr_frees++;
-	gwypfree (ps.sqx);
-	nbllr_frees++;
-	gwypfree (ps.sqy);
-	nbllr_frees++;
-	free (exp);
-	nbllr_frees++;
+	
 	lasterr_point = 0;
 	return (TRUE);
 
@@ -5832,7 +5564,6 @@ restart:
         if (recovering || (nbfftinc == maxfftinc)) {
             if (nbfftinc >= maxfftinc) {
                 OutputBoth ((char*)"Too much retries, restarting from the beginning using fewer GPU computing...\n");
-		nbfftinc = 0;			// JP 04/12/23
                 unlinkSaveFiles (&write_save_file_state);
             } 
             else
@@ -5843,21 +5574,11 @@ restart:
         
 	free (tmp);
         nbllr_frees++;
-//	free (sqR);
-//      nbllr_frees++;
 	free (tmp2);
-        nbllr_frees++;
-	free (tmp3);
-        nbllr_frees++;
-	free (tmp4);
         nbllr_frees++;
 	gwypfree (ps.x);
         nbllr_frees++;
 	gwypfree (ps.y);
-        nbllr_frees++;
-	gwypfree (ps.sqx);
-        nbllr_frees++;
-	gwypfree (ps.sqy);
         nbllr_frees++;
 	free (exp);
         nbllr_frees++;
@@ -5868,17 +5589,9 @@ exit:
         nbllr_frees++;
 	free (tmp2);
         nbllr_frees++;
-	free (tmp3);
-        nbllr_frees++;
-	free (tmp4);
-        nbllr_frees++;
 	gwypfree (ps.x);
         nbllr_frees++;
 	gwypfree (ps.y);
-        nbllr_frees++;
-	gwypfree (ps.sqx);
-        nbllr_frees++;
-	gwypfree (ps.sqy);
         nbllr_frees++;
 	free (exp);
         nbllr_frees++;
@@ -6213,7 +5926,7 @@ int commonFrobeniusPRP (
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -6477,7 +6190,7 @@ Frobeniusresume:
 			}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 			if (interimResidues && bit % interimResidues < 2) {
@@ -6641,7 +6354,7 @@ error:
 //	    gwypdone ();
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -6911,7 +6624,7 @@ int commonPRP (
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -7098,7 +6811,7 @@ error:
             OutputBoth (buf);
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -7374,7 +7087,7 @@ int commonCC1P (
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -7503,7 +7216,7 @@ error:
 //		gwypdone ();
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -7832,7 +7545,7 @@ int commonCC2P (
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -7968,7 +7681,7 @@ error:
 //		gwypdone ();
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -8036,7 +7749,6 @@ int fastIsPRP (
 	w->c = c;
 	w->prp_base = a;
 	w->prp_residue_type = strong? PRP_TYPE_SPRP : PRP_TYPE_FERMAT;
-//	w->fftlen = FFTLEN;
 	if (quotient) 
 		w->prp_residue_type = PRP_TYPE_COFACTOR;
 	else
@@ -8050,7 +7762,6 @@ int fastIsPRP (
 
 /* Do the PRP test */
 
-		w->fftlen = FFTLEN;
 		if (b == 2)
 			retval = GerbiczTest (a, res, str, w);
 		else
@@ -8067,7 +7778,7 @@ int fastIsPRP (
 }
 
 
-/* Test if k*b^n+c is the  prime in a Cunningham chain of the first kind. */
+/* Test if k*b^n+c is the next prime in a Cunningham chain of the first kind. */
 
 int fastIsCC1P (
 	double	k,				/* k in k*b^n+c */
@@ -8100,7 +7811,7 @@ int fastIsCC1P (
 	return (retval);
 }
 
-/* Test if k*2^n+c is the  prime in a Cunningham chain of the second kind. */
+/* Test if k*2^n+c is the next prime in a Cunningham chain of the second kind. */
 
 int fastIsCC2P (
 	double	k,				/* k in k*b^n+c */
@@ -8159,10 +7870,11 @@ int fastIsFrobeniusPRP (
 {
 	char	buf[sgkbufsize+256]; 
 	int	retval;
-	uint32_t P = 3, Q = 0;
+	int32_t P = 3, Q = 0;
 	long D, sign1, sign2, abs_d, sqrtabs_d;
 
 /* Init. the relevant constants */
+
 	if (bpsw) {
             P = 1;
             sign1 = N->n[0]&2? -1 : 1;	    // sign of kronecker(-1, N)
@@ -8430,7 +8142,7 @@ int slowIsPRP (
 	return (retval);
 }
 
-/* Test if N is the  prime in a CC1 chain.  The number N can be of ANY form. */
+/* Test if N is the next prime in a CC1 chain.  The number N can be of ANY form. */
 
 int slowIsCC1P (
 	char	*str,		/* string representation of N */
@@ -8462,7 +8174,7 @@ int slowIsCC1P (
 	return (retval);
 }
 
-/* Test if N is the  prime in a CC2 chain.  The number N can be of ANY form. */
+/* Test if N is the next prime in a CC2 chain.  The number N can be of ANY form. */
 
 int slowIsCC2P (
 	char	*str,				/* string representation of N */
@@ -8538,7 +8250,6 @@ int isPRPinternal (
 	w->b = base;
 	w->n = n;
 	w->c = incr;	// Transmit c to Gerbicz code!
-//	w->fftlen = FFTLEN;
 	
 	tempFileName (filename, 'L', N);
             // See if resuming a Lucas or Frobenius PRP test
@@ -8708,6 +8419,7 @@ int IsPRP (	    // General PRP test
 	unsigned long bits, retval;
 	double dk;
 	giant gd, gr;
+
         if (format == ABCRU || format == ABCGRU) {	// Repunits or Generalized Repunits
 		sprintf (str, "(%lu^%lu-1)/%lu", base, n_orig, base-1);
 		gk = newgiant (1);
@@ -8825,7 +8537,7 @@ int IsPRP (	    // General PRP test
 			gwypfree (gk);
 			return TRUE;
 		}
-		gwypuldivg (base - 1, N);
+		uldivg (base - 1, N);
 		strong = FALSE;				// Do a simple Fermat PRP test (not strong).
 	}
 	else if (format == ABCVARAQS) {
@@ -8837,9 +8549,9 @@ int IsPRP (	    // General PRP test
                 gtog (N, M);                            // keep M = N*known factors
                 while (p != NULL) {
 			strcpy (factor, p);             // copy the tail of the chain.
-			if ((p2 = strchr (p,'/'))!=NULL) {// search for  factor.
+			if ((p2 = strchr (p,'/'))!=NULL) {// search for next factor.
                             factor[p2-p] = '\0';        // terminate the present factor.
-                            p = &p2[1];                 // Point on  factor or end.
+                            p = &p2[1];                 // Point on next factor or end.
 			}
 			else
                             p = NULL;
@@ -8868,7 +8580,7 @@ int IsPRP (	    // General PRP test
 				return TRUE;
 			}
 			else {
-                            gwypdivg (gd, N);
+                            divg (gd, N);
 			}
 			if (p == NULL)
                             break;
@@ -9048,7 +8760,7 @@ int gIsPRP (			// General PRP test
 			return TRUE;
 		}
 		iaddg (-1, gb);
-		gwypdivg (gb, N);				// Divide N by (base-1)
+		divg (gb, N);				// Divide N by (base-1)
 		iaddg (1, gb);
 		quotient = TRUE;
 //		strong = FALSE;				// Do a simple Fermat PRP test (not strong).
@@ -9073,7 +8785,7 @@ int gIsPRP (			// General PRP test
 			return TRUE;
 		}
 		else {
-			gwypdivg (gd, N);
+			divg (gd, N);
 		}
 		w->prp_residue_type = PRP_TYPE_COFACTOR;
 		w->known_factors = sgd;
@@ -9139,7 +8851,7 @@ int gIsPRP (			// General PRP test
 	return retval;
 }
 
-int IsCCP (	// General test for the  prime in a Cunningham chain
+int IsCCP (	// General test for the next prime in a Cunningham chain
 	unsigned long format, 
 	char *sgk,
 	unsigned long base,
@@ -9216,7 +8928,7 @@ int IsCCP (	// General test for the  prime in a Cunningham chain
 	return retval;
 }
 
-int gIsCCP (	// General test for the  prime in a Cunningham chain
+int gIsCCP (	// General test for the next prime in a Cunningham chain
 	unsigned long format, 
 	char *sgk,
 	char *sgb,
@@ -9457,7 +9169,7 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
                 vpf[i] = 1;
                 gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (gbase, gbpc[i]);
-                gwypuldivg (p, gbpc[i]);
+                uldivg (p, gbpc[i]);
                 free (b);
                 return TRUE;
             }
@@ -9466,11 +9178,11 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
             bpf[i] = 3;
             while (!gmodi (3, b)) {
                 vpf[i]++;  // compute the exponent of three
-                gwypuldivg (3, b);
+                uldivg (3, b);
             }
             gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
             gtog (gbase, gbpc[i]);
-            gwypuldivg (3, gbpc[i]);
+            uldivg (3, gbpc[i]);
             i++;
             if ((b->sign <= 2) && isPrime (p = (unsigned long)gtoi (b))) {
                 // b may be the last factor!
@@ -9478,7 +9190,7 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
                 vpf[i] = 1;
                 gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (gbase, gbpc[i]);
-                gwypuldivg (p, gbpc[i]);
+                uldivg (p, gbpc[i]);
                 free (b);
                 return TRUE;
             }
@@ -9508,18 +9220,18 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
                 bpf[i] = p;
                 while (!gmodi (p, b)) {
                     vpf[i]++;	// compute the exponent of p
-                    gwypuldivg (p, b);
+                    uldivg (p, b);
                 }
                 gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (gbase, gbpc[i]);
-                gwypuldivg (p, gbpc[i]);
+                uldivg (p, gbpc[i]);
                 i++;
                 if ((b->sign <= 2) && isPrime ((unsigned long)gtoi (b))){               // b may be the last prime factor!
                     bpf[i] = (unsigned long)gtoi (b);
                     vpf[i] = 1;
                     gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                     gtog (gbase, gbpc[i]);
-                    gwypuldivg (bpf[i], gbpc[i]);
+                    uldivg (bpf[i], gbpc[i]);
                     free (b);
                     return TRUE;
                 }
@@ -9529,18 +9241,18 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
                 bpf[i] = p;
                 while (!gmodi (p, b)) {
                     vpf[i]++;   // compute the exponent of p
-                    gwypuldivg (p, b);
+                    uldivg (p, b);
                 }
                 gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (gbase, gbpc[i]);
-                gwypuldivg (p, gbpc[i]);
+                uldivg (p, gbpc[i]);
                 i++;
                 if ((b->sign <= 2) && isPrime ((unsigned long)gtoi (b))){               // b may be the last prime factor!
                     bpf[i] = (unsigned long)gtoi (b);
                     vpf[i] = 1;
                     gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                     gtog (gbase, gbpc[i]);
-                    gwypuldivg (bpf[i], gbpc[i]);
+                    uldivg (bpf[i], gbpc[i]);
                     free (b);
                     return TRUE;
                 }
@@ -9557,7 +9269,7 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
             vpf[i] = 1;
             gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
             gtog (gbase, gbpc[i]);
-            gwypuldivg (bpf[i], gbpc[i]);
+            uldivg (bpf[i], gbpc[i]);
             free (b);
             return TRUE;
 	}
@@ -9566,7 +9278,7 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
             // To signal a large integer cofactor
             gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
             gtog (gbase, gbpc[i]);
-            gwypdivg (b, gbpc[i]);
+            divg (b, gbpc[i]);
             gbpf[i] = newgiant (2*abs(gbase->sign) + 8);
             if (bitlen(b) <= 40 || (gaprcltest (b, 0, 0) == 2)) {
                 gtog (b, gbpf[i]);  // The cofactor is prime !
@@ -9577,13 +9289,13 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
                 gfact (b, gbpf[i], 0, 0, debug);
                 // Try to factorize using R.Crandall code
                 gtog (gbase, gbpc[i]);
-                gwypdivg (gbpf[i], gbpc[i]);
+                divg (gbpf[i], gbpc[i]);
                 i++;
                 bpf[i] = vpf[i] = 1;
                 // To signal a large integer cofactor
                 gbpc[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (gbase, gbpc[i]);
-                gwypdivg (b, gbpc[i]);
+                divg (b, gbpc[i]);
                 gbpf[i] = newgiant (2*abs(gbase->sign) + 8);
                 gtog (b, gbpf[i]);
                 free (b);
@@ -9668,7 +9380,7 @@ restart:
 
 
 	gtog (exponent, tmp2);
-//	gwypuldivg (base, tmp2);	// tmp2 = exponent/base
+//	uldivg (base, tmp2);	// tmp2 = exponent/base
 
 	Nlen = bitlen (tmp2);
 
@@ -9930,7 +9642,7 @@ restart:
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -10424,7 +10136,7 @@ error:
             OutputBoth (buf);
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -10500,7 +10212,7 @@ int plusminustest (
 //	Be sure the base does not divide the gk multiplier :
 
 	while (!(gmodi (base, gk))) {
-		gwypuldivg (base, gk);
+		uldivg (base, gk);
 		n++;
 	}
 
@@ -10914,7 +10626,7 @@ restart:
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -11031,7 +10743,7 @@ restart:
 DoLucas:
 			do {
 				retval = Lucasequence (N, M, P, base, jmin, jmax, str, buf, res);
-				if (retval == -2) {		// Restart required using  base
+				if (retval == -2) {		// Restart required using next base
 					nrestarts++;
 					if (nrestarts > maxrestarts) {
 						sprintf (buf, "Giving up after %lu restarts...", nrestarts);
@@ -11272,7 +10984,7 @@ error:
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -11369,7 +11081,7 @@ restart:
 
 
 	gtog (exponent, tmp2);
-//	gwypdivg (gb, tmp2);	// tmp2 = exponent/base
+//	divg (gb, tmp2);	// tmp2 = exponent/base
 
 	Nlen = bitlen (tmp2);
 
@@ -11632,7 +11344,7 @@ restart:
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -12113,7 +11825,7 @@ error:
             OutputBoth (buf);
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -12209,7 +11921,7 @@ int gplusminustest (
 //	Be sure the base does not divide the gk multiplier :
 
 /*	while (!(gmodi (base, gk))) {
-		gwypuldivg (base, gk);
+		uldivg (base, gk);
 		n++;
 	}
 */
@@ -12219,7 +11931,7 @@ int gplusminustest (
 			modg (gb, grem);
 			if (!isZero(grem))
 				break;
-			gwypdivg (gb, gk);
+			divg (gb, gk);
 			n++;
 		}
 		free (grem);
@@ -12396,7 +12108,7 @@ restart:
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 	if (incr == +1) {
             gwypsetmaxmulbyconst (abs(a));
-//            gwypdivg (gb, tmp);		// tmp = (N-1)/base
+//            divg (gb, tmp);		// tmp = (N-1)/base
 //            gtog (gb, tmp);
 //            power (tmp, n-1);
 //            mulg (gk, tmp);             // tmp = (N-1)/base
@@ -12651,7 +12363,7 @@ restart:
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -12771,7 +12483,7 @@ restart:
 DoLucas:
 			do {
 				retval = gLucasequence (N, M, P, gb, jmin, jmax, str, buf, res);
-				if (retval == -2) {		// Restart required using  base
+				if (retval == -2) {		// Restart required using next base
 					nrestarts++;
 					if (nrestarts > maxrestarts) {
 						sprintf (buf, "Giving up after %lu restarts...", nrestarts);
@@ -13024,7 +12736,7 @@ error:
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -13827,7 +13539,7 @@ MERSENNE:
 		} 
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && j % interimResidues < 2) {
@@ -13970,7 +13682,7 @@ error:
 			IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
                 g_fftlen = 0;
 		if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-			IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+			IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
 			return (FALSE);
 		}
 		else
@@ -14387,7 +14099,7 @@ int isGMNP (
 	int	*res) 
 { 
 	unsigned long bits; 
-	giant	tmp6, tmp7, apow4; 
+	giant	tmp, tmp2, apow4; 
 	char	buf[sgkbufsize+256], 
 		str[sgkbufsize+256], strp[sgkbufsize+256]; 
 	int	retval, sign; 
@@ -14437,7 +14149,7 @@ int isGMNP (
 		addg (M, NP);	    // N' = 2^n + 2^((n+1)/2) + 1
 	}
 
-	gwypuldivg (5, NP);		    // NP = N'/5
+	uldivg (5, NP);		    // NP = N'/5
 	itog (1, M);
 	gshiftleft (2*n, M);	    // M  = 2^(2*n)
 	iaddg (1, M);		    // M  = N*N' = 2^(2*n) + 1
@@ -14499,8 +14211,8 @@ int isGMNP (
 
 /* More initializations... */
 
-	tmp6 = newgiant(4*FFTLEN*sizeof(double)/sizeof(short) + 16);
-	tmp7 = newgiant(4*FFTLEN*sizeof(double)/sizeof(short) + 16);
+	tmp = newgiant(4*FFTLEN*sizeof(double)/sizeof(short) + 16);
+	tmp2 = newgiant(4*FFTLEN*sizeof(double)/sizeof(short) + 16);
 //	tmp3 = newgiant(2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	apow4 = newgiant(32);
 	itog (a, apow4);
@@ -14524,40 +14236,41 @@ int isGMNP (
         
 //        gwypdone();
 	if (retval == FALSE)
-	goto EXIT;
+		goto EXIT;
 
 	clearline (100);
 
-	gtog (ps.gx, tmp6);
-	modg (M, tmp6);
-	gtog (ps.gy, tmp7);
-	modg (M, tmp7);
+	gtog (ps.gx, tmp);
+	modg (M, tmp);
+	gtog (ps.gy, tmp2);
+	modg (M, tmp2);
 	if (sign) {
-		mulg (tmp7, tmp6);
-		modg (N, tmp6);
-		iaddg (1, tmp6);	// Compute the (unnormalized) residue
+		mulg (tmp2, tmp);
+		modg (N, tmp);
+		iaddg (1, tmp);	// Compute the (unnormalized) residue
 	}
 	else {
-		gwypinvg (N, tmp7);   // 19/04/21 residue must match with LLR 3.8.24
-		mulg (tmp7, tmp6);
-		modg (N, tmp6);
-		iaddg (1, tmp6);
+		gwypinvg (N, tmp2);   // 19/04/21 residue must match with LLR 3.8.24
+		mulg (tmp2, tmp);
+		modg (N, tmp);
+		iaddg (1, tmp);
 	}
+	
 /* See if we've found a Proth prime.  If not, format a 64-bit residue. */
 
 //	if (resaprcl1 != 2)	{
 // Exclude this output if previous APRCL positive result
-        if (gcompg (N, tmp6) != 0) {
+        if (gcompg (N, tmp) != 0) {
                 res1 = FALSE;	/* Not a prime */
-            if (abs(tmp6->sign) < 2)
+            if (abs(tmp->sign) < 2)
                 // make a 64 bit residue correct !!
-                sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp6->n[0]);
-            else if (abs(tmp6->sign) < 3)
-                sprintf (res64, "%04X%04X%04X%04X", 0, 0, tmp6->n[1], tmp6->n[0]);
-            else if (abs(tmp6->sign) < 4)
-                sprintf (res64, "%04X%04X%04X%04X", 0, tmp6->n[2], tmp6->n[1], tmp6->n[0]);
+                sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp->n[0]);
+            else if (abs(tmp->sign) < 3)
+                sprintf (res64, "%04X%04X%04X%04X", 0, 0, tmp->n[1], tmp->n[0]);
+            else if (abs(tmp->sign) < 4)
+                sprintf (res64, "%04X%04X%04X%04X", 0, tmp->n[2], tmp->n[1], tmp->n[0]);
             else
-                sprintf (res64, "%04X%04X%04X%04X", tmp6->n[3], tmp6->n[2], tmp6->n[1], tmp6->n[0]);
+                sprintf (res64, "%04X%04X%04X%04X", tmp->n[3], tmp->n[2], tmp->n[1], tmp->n[0]);
             }
             else {
                 res1 = TRUE;
@@ -14619,47 +14332,48 @@ int isGMNP (
 
 #endif
 //	}									// End Exclude...
-	gtog (ps.gx, tmp6);
-	modg (M, tmp6);
-	gtog (ps.gy, tmp7);
-	modg (M, tmp7);
+	gtog (ps.gx, tmp);
+	modg (M, tmp);
+	gtog (ps.gy, tmp2);
+	modg (M, tmp2);
 
 	if (sign) {
-		mulg (tmp6, tmp6);
-		modg (NP, tmp6);
-		mulg (tmp7, tmp7);
-		mulg (apow4, tmp7);
-		modg (NP, tmp7);
+		mulg (tmp, tmp);
+		modg (NP, tmp);
+		mulg (tmp2, tmp2);
+		mulg (apow4, tmp2);
+		modg (NP, tmp2);
 	}
 	else {
-		mulg (tmp6, tmp6);
-		modg (NP, tmp6);
-		mulg (tmp7, tmp6);
-		modg (NP, tmp6);
-		mulg (tmp7, tmp6);
-		modg (NP, tmp6);
-		gtog (apow4, tmp7);
-		modg (NP, tmp7);
+		mulg (tmp, tmp);
+		modg (NP, tmp);
+		mulg (tmp2, tmp);
+		modg (NP, tmp);
+		mulg (tmp2, tmp);
+		modg (NP, tmp);
+		gtog (apow4, tmp2);
+		modg (NP, tmp2);
 	}
 
 //	if ((resaprcl2 != 1) && (resaprcl2 != 2)) {
 // Exclude this output if previous APRCL positive result
 
-        if (gcompg (tmp7, tmp6) != 0) {
-            subg (tmp7, tmp6);
+        if (gcompg (tmp2, tmp) != 0) {
+            subg (tmp2, tmp);
             res2 = FALSE;   /* Not a prime */
-            if (abs(tmp6->sign) < 2)
+            if (abs(tmp->sign) < 2)
                 // make a 64 bit residue correct !!
-                sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp6->n[0]);
-            else if (abs(tmp6->sign) < 3)
-                sprintf (res64, "%04X%04X%04X%04X", 0, 0, tmp6->n[1], tmp6->n[0]);
-            else if (abs(tmp6->sign) < 4)
-                sprintf (res64, "%04X%04X%04X%04X", 0, tmp6->n[2], tmp6->n[1], tmp6->n[0]);
+                sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp->n[0]);
+            else if (abs(tmp->sign) < 3)
+                sprintf (res64, "%04X%04X%04X%04X", 0, 0, tmp->n[1], tmp->n[0]);
+            else if (abs(tmp->sign) < 4)
+                sprintf (res64, "%04X%04X%04X%04X", 0, tmp->n[2], tmp->n[1], tmp->n[0]);
             else
-                sprintf (res64, "%04X%04X%04X%04X", tmp6->n[3], tmp6->n[2], tmp6->n[1], tmp6->n[0]);
+                sprintf (res64, "%04X%04X%04X%04X", tmp->n[3], tmp->n[2], tmp->n[1], tmp->n[0]);
         }
         else
             res2 = TRUE;
+
 
 /* Print results.  Do not change the format of this line as Jim Fougeron of */
 /* PFGW fame automates his QA scripts by parsing this line. */
@@ -14714,15 +14428,15 @@ int isGMNP (
 /* Cleanup and return */
 
 
+//	gwypfree(ps.gx);
+//	gwypfree(ps.gy);
 
+EXIT:
 
 	gwypfree(ps.gx);
-	nbllr_frees++;
 	gwypfree(ps.gy);
-	nbllr_frees++;
-EXIT:					// 01/12/23
-	gwypfree(tmp6);
-	gwypfree(tmp7);
+	gwypfree(tmp);
+	gwypfree(tmp2);
 	gwypfree(apow4);
 	gwypfree(gk);
 	gwypfree(N);
@@ -14775,12 +14489,13 @@ int isWSPRP (
 	testn =  newgiant ((bits>>3) + 16);	// For factoring
 
 //	Compute the numbers we are testing or using.
+
 	itog (1, M);
 	gshiftleft (n, M);	// M  = 2^n
 	iaddg (1, M);		// M  = 2^n + 1
 	gtog (M, NP);		// NP  = 2^n + 1
-	gwypuldivg (3, NP);	// NP  = (2^n + 1)/3
-       nbdg = gnbdg (NP, 10);
+	uldivg (3, NP);		// NP  = (2^n + 1)/3
+        nbdg = gnbdg (NP, 10);
 
         if (!setupok ((nbdg < 400), NP, sgk, res)) {
 		gwypfree(NP);   // Force APRCL test for small numbers...
@@ -15086,7 +14801,7 @@ restart:
 		}
 
 /* Output the 64-bit residue at specified interims.  Also output the */
-/* residues for the  iteration so that we can compare our */
+/* residues for the next iteration so that we can compare our */
 /* residues to programs that start counter at zero or one. */
 
 		if (interimResidues && bit % interimResidues < 2) {
@@ -15315,7 +15030,7 @@ error:
 //            gwypdone ();
             _unlink (filename);
             if(IniGetInt(INI_FILE, (char*)"StopOnAbort", 0)) {
-                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", IniGetInt(INI_FILE, (char*)"PgenLine", 0) + 1);	// Point on the next line
                 return (FALSE);
             }
             else
@@ -15376,7 +15091,6 @@ int process_num (
     unsigned long ninput = n, base, binput, b_2up = 1, b_else = 1, superPRP = 1;
     long mult;
 // Lei end
-    nbllr_mallocs = nbllr_frees = 0;			// JP 29/11/23
     n_orig = n;
 
     gformat = format; // save format in a global.
@@ -15460,8 +15174,6 @@ int process_num (
         }
         globalb = base;
             // Keep the base of the candidate in a global
-	free (gb);		// gb is no more useful JP 28/11/23
-	nbllr_frees++;
 
 // Lei mod
         if (format == ABCDP) {
@@ -15488,7 +15200,6 @@ int process_num (
         else  {
             retval = IsPRP (format, sgk, base, n, incr, shift, res);
         }
-        goto EXITPR;			// JP 28/11/23
     }   // End gb is a small integer.
     else if ((format == NPGCC1 || format == NPGCC2) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0)) {
         retval = gIsCCP (format, sgk, sgb, gb, n, incr, shift, res);
@@ -15534,7 +15245,7 @@ int primeContinue ()
 /* Handle a sieving program output file */
 
     if (work == 0) {
-        char    inputfile[IBSIZE+10], outputfile[IBSIZE+10], oldinputfile[IBSIZE+10], cmaxroundoff[10], cpcfftlim[10], sgk[sgkbufsize], buff[sgkbufsize+256];
+        char    inputfile[80], outputfile[80], oldinputfile[80], cmaxroundoff[10], cpcfftlim[10], sgk[sgkbufsize], buff[sgkbufsize+256];
         char	hbuff[sgkbufsize+256], outbuf[sgkbufsize+256], last_processed_k[sgkbufsize+256];
         FILE *fd;
         unsigned long i, chainlen, m, n, base, nfudge, nn, k, b, d;
@@ -15795,7 +15506,7 @@ OPENFILE :
                     format = ABCFBAS;
                 }
                 else {
-                    OutputBoth ((char*)"Invalid ABC format,  data lines will be flushed...\n");
+                    OutputBoth ((char*)"Invalid ABC format, next data lines will be flushed...\n");
                     validheader = FALSE;    // Invalid header found...
                 }
 
@@ -15818,11 +15529,11 @@ OPENFILE :
                         }
                     }
                 }
-                continue;    // Read  line, but do not change PgenLine!
+                continue;    // Read next line, but do not change PgenLine!
             }		     // End ABC format header found
             else if (((argcnt = sscanf (buff, $LLF":%c:%lu:"$LLF":%lu\n", &li, &c, &chainlen, &smallbase, &mask)) > 1) || !line) {
                 if (argcnt < 4) {
-                    OutputBoth ((char*)"Missing or invalid NewPGen header,  data lines will be flushed...\n");
+                    OutputBoth ((char*)"Missing or invalid NewPGen header, next data lines will be flushed...\n");
                     validheader = FALSE;    // Invalid NewPGen header...
                 }
                 else {      // Valid NewPGen header
@@ -15842,7 +15553,7 @@ OPENFILE :
                     }
                     if (chainlen == 0) chainlen = 1;
                 }
-                continue;   // Read  line, but do not change PgenLine!
+                continue;   // Read next line, but do not change PgenLine!
             }		    // End NewPGen header found
 
             else {	    // Processing a data line
@@ -16031,7 +15742,7 @@ OPENFILE :
 // #define MODE_PLUS_DUAL 0x8001	/* b^n+k
 // #define MODE_MINUS_DUAL 0x8002	/* b^n-k
 // #define MODE_NOTGENERALISED 0x400
-// Those entries that have a (*)  to them are modified if the
+// Those entries that have a (*) next to them are modified if the
 // MODE_NOTGENERALISED flag is set.  If it is set, they are changed
 // as follows
 // MODE_2PLUS      2k.b^n+1
@@ -16203,7 +15914,7 @@ OPENFILE :
                                     break;
                             }
 
-// Bump k or n for the  iteration or for the MODE_2PLUS and
+// Bump k or n for the next iteration or for the MODE_2PLUS and
 // MODE_2MINUS flags
 
                             if (mask & MODE_NOTGENERALISED)
@@ -17034,13 +16745,13 @@ OPENFILE :
             recovering = FALSE; // 21/04/21
             
             if ((!rising_ns && !rising_ks) || (rising_ns && rising_ks))
-                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);		// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);		// Point on the next line
             if (rising_ns && !rising_ks) {
-                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);		// Point on the  n
+                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);		// Point on the next n
                 last_processed_n = n;
             }
             if (rising_ks && !rising_ns) {
-                IniWriteString (INI_FILE, (char*)"Last_Processed_k", sgk);  // Point on the  k
+                IniWriteString (INI_FILE, (char*)"Last_Processed_k", sgk);  // Point on the next k
                 strcpy (last_processed_k, sgk);
             }
             if(n>=(unsigned long)IniGetInt(INI_FILE, (char*)"MaxN", 2147483647)) {
@@ -17096,11 +16807,11 @@ done:
         
         if(IniGetInt(INI_FILE, (char*)"StopOnSuccess", 0) && res) {
             if ((!rising_ns && !rising_ks) || (rising_ns && rising_ks))
-                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);	// Point on the  line
+                IniWriteInt (INI_FILE, (char*)"PgenLine", line + 1);	// Point on the next line
             if (rising_ns && !rising_ks)
-                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);	// Point on the  n
+                IniWriteInt (INI_FILE, (char*)"Last_Processed_n", n);	// Point on the next n
             if (rising_ks && !rising_ns)
-                IniWriteString (INI_FILE, (char*)"Last_Processed_k", sgk);   // Point on the  k
+                IniWriteString (INI_FILE, (char*)"Last_Processed_k", sgk);   // Point on the next k
         }
         else if (!aborted && ((!rising_ns && !rising_ks) || (rising_ns && rising_ks)))
             IniWriteInt (INI_FILE, (char*)"PgenLine", line);	// Point again on the current line...

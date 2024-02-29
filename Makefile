@@ -4,9 +4,9 @@ CULIB = $(CUDA)/lib64
 CUINC = $(CUDA)/include
 # CUFLAGS = -O$(OptLevel) --compiler-options=-Wall -I$(CUINC)
 llrCUDA: lprime.o lmenu.o gwdbldbl.o gwypnum.o giants.o giantext.o
-	$(CUC) -O3 -arch sm_61 -o llrCUDA lprime.o lmenu.o gwdbldbl.o giants.o giantext.o gwypnum.o -L$(CULIB) -lgmp -lcufft -lcudart -lm -lstdc++
+	$(CUC) -O3 -arch sm_61 -o llrCUDA lprime.o lmenu.o gwdbldbl.o giants.o giantext.o gwypnum.o ./libgmp.so -L$(CULIB)  -lcufft -lcudart -lm -lstdc++
 sllrCUDA: lprime.o lmenu.o gwdbldbl.o gwypnum.o giants.o giantext.o
-	$(CUC) -O3  -arch sm_61 lprime.o lmenu.o gwdbldbl.o giants.o giantext.o gwypnum.o ./libcudart_static.a ./libcufft_static.a ./libculibos.a -L. -lgmp  -lm -lstdc++ -o sllrCUDA
+	$(CUC) -O3  -arch sm_61 lprime.o lmenu.o gwdbldbl.o giants.o giantext.o gwypnum.o ./libcudart_static.a ./libcufft_static.a ./libculibos.a ./libgmp.so -L. -lm -lstdc++ -o sllrCUDA
 gwypnum.o: gwypnum.cu
 	$(CUC) -O3 -I$(CUINC) -I. -Wno-deprecated-gpu-targets gwypnum.cu -c
 lprime.o: lprime.cu

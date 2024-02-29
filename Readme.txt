@@ -1,9 +1,25 @@
 
-		Welcome to llrCUDA program Version 3.8.7 !
+		Welcome to llrCUDA program Version 3.8.8 !
 
 
 0) What is new in this version :
 
+  The only new feature in this version is to allow the access to
+  sqrt(-1) modulo P when P is a Proth or Gaussian Mersenne norm prime.
+  To do that, four options are implemented :
+  -oPrtsqrtm1=<base> : print data if 2<=base<=36 , 64bit residue if base = 1
+  -oSvtsqrtm1=<base> : Save the data on disk as characters in this base.
+  -oSvzsqrtm1=1 : Save the data on disk in raw GMP form.
+  -oSvgsqrtm1=1 : Save the data on disk to be read further in giant format.
+  I implemented the patch sent to me by Serge Batalov to process the special
+  case of Phi(3,-b^n)=b^2n-b^n+1 using the pattern (ABC $a^$b-$a^$c+1) for
+  the input file. Using the modulus b^3n+1=(b^2n-b^n+1)(b^n+1) allows to
+  benefit fully from the speed of DWT for the Pocklington algorithm.
+  Serge got recently the largest known non-Mersenne prime with this method.
+  And now, some minor updates :
+  - UseCharCode=1 is no more required to have a correct .res file.
+  - OLDRES64 is no more written by default.
+  - NextFFTifNearLimit option is now set to FALSE by default.
     I added two new ABC formats, principally to help PRP searchers.
   - k*b^n+c format with k, b, c fixed, for example : ABC 22*17^n+13
   - (k*b^n+c)/d format with k, b, c, d fixed, for example : ABC (1*16^n+619)/5
