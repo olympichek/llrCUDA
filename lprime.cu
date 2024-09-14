@@ -199,7 +199,7 @@ int main (
     char   buf[256];
     int	   named_ini_files = -1;
     int	   background = 0;
-    int	   i, opcnt = 0;
+    int	   i, opcnt = 0, leftbracket = 0;
     char   *p;
     char   *p2;
     char   m_pgen_input[80], m_pgen_output[80], oldm_pgen_input[80];
@@ -315,7 +315,8 @@ int main (
 		case 'Q':
 		case 'q':
 			if (*p == '(') {				// must begin with digits or (
-				quotient = TRUE;
+//				quotient = TRUE;
+			    leftbracket = 1;
 				p++;
 			}
 			if (!isdigit(*p))
@@ -371,10 +372,12 @@ NOMULTIPLIER:
 				*p2++ = *p++;
 			*p2 = '\0';
 			dnflag = ' ';					// restore the dnflag
-			if ((*p == ')') && (*(p+1) == '/')) {	// get the divisor(s)
+			if (*p == ')') { 
+			    if (*(p+1) == '/') {	// get the divisor(s)
 				quotient = TRUE;
 				p += 2;
 				strcpy (divisors, p);		// and that is all...
+			    }
 			}
 			else {
 				if ((*p != '\0') && ((addin[0] != '-') || (*p != '^')))	// must be end of string or diffnum...
@@ -410,6 +413,10 @@ DIGITSONLY:
 				if (quotient) {
 					fprintf (in, "ABC ($a*$b^$c$d)/$e\n");// write ABC header and data
 					fprintf (in, "%s %s %s %s %s\n", multiplier, base, exponent, addin, divisors);
+				}
+				else if (leftbracket){
+					fprintf (in, "ABC ($a^$b$c)^2-2\n");// write ABC header and data
+					fprintf (in, "%s %s %s\n", base, exponent, addin);
 				}
 				else {
 					fprintf (in, "ABC $a*$b^$c$d\n");// write ABC header and data

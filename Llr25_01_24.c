@@ -78,11 +78,11 @@ unsigned long format;
 // Some ABC format strings
 
 char ckstring[] = "(2^$a$b)^2-2";	// Carol/Kynea
-char eckstring[] = "($a^$b$c)^2-2";	// Extended Carol/Kynea or Extended Square minus two
 char cwstring[] = "$a*$b^$a$c";		// Cullen/Woodall
 char ffstring[] = "$a*2^$b+1";		// FermFact output
 char ffmstring[] = "$a*2^$b-1";		// Lei output
 char gmstring[] = "4^$a+1";		// Gaussian Mersenne norms
+
 char gfstring[] = "$a^$b+1";		// Special primality test for generalized Fermat numbers
 char spstring[] = "(2^$a+1)/3";		// Special SPRP test for Wagstaff numbers
 char dpstring[] = "DivPhi($a*$b^$c+1)"; // like-PRP test for DivPhi(...,2)
@@ -91,7 +91,6 @@ char grepustring[] = "($a^$b-1)/($a-1)";// PRP test for generalized repunits num
 char diffnumpstring[] = "$a^$b-$a^$c+%d";// If $b>$c, it is [$a^($b-$c)-1]*$a^$c+%d so, form K*B^N+C
 char diffnummstring[] = "$a^$b-$a^$c-%d";// If $b>$c, it is [$a^($b-$c)-1]*$a^$c-%d so, form K*B^N+C
 char diffnumstring[] = "$a^$b-$a^$c$d";	// General diffnum format
-
 // Fixed k and c forms for k*b^n+c
 
 char fkpstring[] = ""$LLF"*$a^$b+%d";
@@ -154,8 +153,7 @@ char wfsstring[] = "$a$b$c";
 
 #define ABCVARAQS   19 // k, b, n, c and divisor specified on each input line or header
 #define ABCVARAS    18 // k, b, n, and c specified on each input line or header
-#define ABCDP	    28 // Format used for DivPhi()
-#define ABCECK	    29 // Format used for Extended square minus two
+#define ABCDP	    28  // Format used for DivPhi()
 
 
 /* Process a number from newpgen output file */
@@ -200,7 +198,7 @@ char	RESFILE[80] = {0};
 char	LOGFILE[80] = {0};
 char	EXTENSION[8] = {0};
 
-
+// int fftlen = 0;
 int ERRCHK = 0;
 unsigned int PRIORITY = 1;
 unsigned int CPU_AFFINITY = 99;
@@ -253,7 +251,6 @@ unsigned long n_orig;	/* exponent associated to initial base sgb */
 long OLDFFTLEN = 0; /* previous value of FFTLEN, used by setuponly option */
 unsigned long ndiff = 0;/* used for b^n-b^m+c number processing */
 unsigned long gformat;	/* used for b^n-b^m+c number processing */
-unsigned long possiblyfalsenegative = 0;
 							
 struct work_unit *w = NULL;	// Work to do data as described in Prime95
 
@@ -263,18 +260,35 @@ giant testn, testnp;
 unsigned long facn = 0, facnp = 0;
 int resn = 0, resnp = 0;
 char facnstr[80], facnpstr[80];
-char multiplier[IBSIZE], base[IBSIZE], exponent[IBSIZE], exponent2[IBSIZE], addin[IBSIZE], divisors[IBSIZE];
+// char m_pgen_input[IBSIZE], m_pgen_output[IBSIZE], oldm_pgen_input[IBSIZE];
+// char keywords[10][IBSIZE], values[10][IBSIZE];
+ char multiplier[IBSIZE], base[IBSIZE], exponent[IBSIZE], exponent2[IBSIZE], addin[IBSIZE], divisors[IBSIZE];
+// char inifilebuf[IBSIZE];
 char    string_rep[80];
 char    sgd[sgkbufsize];
 char    sgb[sgkbufsize];
 char    bpfstring[sgkbufsize];
 char    cMAXBPD[10]={0};
+/*
+#ifndef X86_64
+
+void setupf();
+int factor64();
+void psetupf();
+int pfactor64();
+
+#endif
+
+void* aligned_malloc (unsigned long, unsigned long);
+void  aligned_free (void *);
+*/
 static unsigned long last_bit[10] = {0};
 static double last_suminp[10] = {0.0};
 static double last_sumout[10] = {0.0};
 static double last_maxerr[10] = {0.0};
 static double maxroundoff = 0.40;
 double MAXBPD = 37.0;
+// static double fpart = 0.0;
 
 static unsigned long mask;
 
@@ -345,13 +359,16 @@ unsigned long nrestarts = 0;
 // Nb. of restarts for an N+1 or N-1 prime test
 int      nbdg = 0, nbdg1, nbdg2;
 unsigned long globalb = 2;	// base of the candidate in a global
-double	globalk = 1.0;   	// k value of the candidate in a global
+double	globalk = 1.0;   // k value of the candidate in a global
 
 double	pcfftlim = 0.5;	
-int readlg, writelg;		// Values returned by low level I/O
+int readlg, writelg;	// Values returned by low level I/O
+
+// double timers[10] = {0.0};	/* Up to five separate timers */
 
 double smargin = 0.0;
 
+// int is_valid_double(double);
 int genProthBase(giant, uint32_t);
 long generalLucasBase(giant , uint32_t *, uint32_t *);
 unsigned long gcd (
@@ -361,6 +378,8 @@ unsigned long gcd (
 unsigned long ulbitlen (unsigned long);
 unsigned long ulbitval (unsigned long, unsigned long);
 
+// int ispower (unsigned long,
+//	unsigned long);
 
 /* Utility output routines */
 
@@ -662,6 +681,7 @@ void readIniFiles ()
     const char *p;
     char cpustring[100];
  
+//  getCpuInfo (); 
  
     PRECISION = (unsigned int) IniGetInt (INI_FILE, (char*)"PercentPrecision", 2); 
     if (PRECISION > 6) 
@@ -688,6 +708,7 @@ void readIniFiles ()
         (char*)"Affinity", 99); 
         if (CPU_AFFINITY!=99) {
             CPU_MASK = 1<<CPU_AFFINITY;
+//            p = IniSectionGetNthStringRaw (INI_FILE, NULL, "Affinity", 1);
             IniGetString (INI_FILE, (char*)"Affinity", cpustring, 100, (char*)"99");
             p = strchr (cpustring, ',');
             while (p != NULL) {
@@ -701,11 +722,15 @@ void readIniFiles ()
     HIDE_ICON = (int) IniGetInt (INI_FILE, (char*)"HideIcon", 0); 
     TRAY_ICON = (int) IniGetInt (INI_FILE, (char*)"TrayIcon", 1); 
  
-
+/* Guess the CPU type if it isn't known.  Otherwise, validate it. */ 
+ 
+//  getCpuInfo (); 
+ 
 /* Other oddball options */ 
  
     CUMULATIVE_TIMING = IniGetInt (INI_FILE, (char*)"CumulativeTiming",
         0); 
+//  HIGH_RES_TIMER = isHighResTimerAvailable (); 
 } 
  
 /*----------------------------------------------------------------------
@@ -1477,13 +1502,38 @@ fail:	_close (fd);
     return (FALSE);
 }
 
-/* Read and write intermediate results to a file */
 
+/* Read and write intermediate results to a file */
+/*
+int read_gwypnum (
+	int	fd,
+	gwypnum	g,
+	long	*sum)
+{
+	giant	tmp;
+	long	i, len, bytes;
+
+	tmp = newgiant(FFTLEN*sizeof(double)/sizeof(short) + 16);
+	if (_read (fd, &len, sizeof (long)) != sizeof (long)) {
+            gwypfree (tmp);
+            return (FALSE);
+        }
+	bytes = len * sizeof (short);
+	if (_read (fd, tmp->n, bytes) != bytes) return (FALSE);
+	tmp->sign = len;
+	*sum += len;
+	for (i = 0; i < len; i++) *sum += tmp->n[i];
+	gianttogwyp (tmp, g);
+	gwypfree (tmp);
+	return (TRUE);
+}
+*/
 int read_gwypnum (
     int fd,
     gwypnum  g,
     long    *sum)
 {
+//  giant   tmp;
     long    len, bytes;
 
     if (_read (fd, &len, sizeof (long)) != sizeof (long)) 
@@ -1495,11 +1545,36 @@ int read_gwypnum (
     return (TRUE);
 }
 
+/*
+int write_gwypnum (
+        int     fd,
+        gwypnum  g,
+        long    *sum)
+{
+        giant   tmp;
+        long    i, len, bytes;
+
+        tmp = newgiant(FFTLEN*sizeof(double)/sizeof(short) + 16);
+        gwyptogiant (g, tmp);
+        len = tmp->sign;
+        if (_write (fd, &len, sizeof (long)) != sizeof (long)) {
+            gwypfree (tmp);
+            return (FALSE);
+        }
+        bytes = len * sizeof (short);
+        if (_write (fd, tmp->n, bytes) != bytes) return (FALSE);
+        *sum += len;
+        for (i = 0; i < len; i++) *sum += tmp->n[i];
+        gwypfree (tmp);
+        return (TRUE);
+}
+*/
 int write_gwypnum (
     int	fd,
     gwypnum g,
     long    *sum)
 {
+//  giant   tmp;
     long    len, bytes;
 
     len = FFTLEN;
@@ -1726,6 +1801,7 @@ int write_array (
 	return (TRUE);
 }
 
+//#define CHECKSUM_OFFSET	48	// JP 25/11/23
 #define CHECKSUM_OFFSET	5*sizeof(long)+2*sizeof(double)+12	// JP 27/11/23
 
 int read_checksum (
@@ -1794,6 +1870,7 @@ int read_header (
 	if (sum == NULL) sum = &trash_sum;
 	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);			// JP 25/11/23
 	if (_read (fd, sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
+//	if (!read_checksum (fd, sum)) return (FALSE);
         
 /* Validate the k,b,n,c values */
 
@@ -1831,6 +1908,7 @@ int write_header (
 	if (!write_array (fd, w->stage, 11, NULL)) return (FALSE);
 	if (!write_array (fd, &pad, 1, NULL)) return (FALSE);		// jp 25/11/23
 	if (!write_double298 (fd, w->pct_complete, NULL)) return (FALSE);
+//	if (!write_long298 (fd, sum, NULL)) return (FALSE);
 	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);
 	if (_write (fd, &sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
 	return (TRUE);
@@ -1952,6 +2030,7 @@ int readFFTLENFromFile (
 {
     int  fd;
     unsigned long magicnum, version;
+//       long    sum = 0, i;
     char errmsg[100];
 
 /* Open the intermediate file */
@@ -2264,220 +2343,6 @@ error:
     return (FALSE);
 }
 
-int writeToFileBCQ (
-    char    *filename,
-    unsigned long j,
-    unsigned long B,
-    unsigned long C,
-    unsigned long nr,
-    unsigned long *bpf,
-    gwypnum x,
-    gwypnum y,
-    gwypnum	gwQpow)
-{
-    char    newfilename[16],errmsg[100];
-    int	    fd;
-    unsigned long magicnum, version;
-    long    sum = 0, i;
-
-
-    if (debug) {
-        sprintf (errmsg, "Writing %s intermediate file, j = %lu\n",filename, j);
-        OutputBoth (errmsg);
-    }
-
-/* If we are allowed to create multiple intermediate files, then */
-/* write to a file called yNNNNNNN. */
-
-    strcpy (newfilename, filename);
-    if (TWO_BACKUP_FILES)
-        newfilename[0] = 'y';
-
-/* Create the intermediate file */
-
-    fd = _open (newfilename, _O_BINARY|_O_WRONLY|_O_TRUNC|_O_CREAT, 0666);
-    if (fd < 0)
-        return (FALSE);
-
-/* Write the file header. */
-
-    magicnum = 0x9f2b3cd4;
-    if (_write (fd, &magicnum, sizeof (long)) != sizeof (long))
-        goto writeerr;
-    version = 1;
-    if (_write (fd, &version, sizeof (long)) != sizeof (long))
-        goto writeerr;
-
-/* Write the file data */
-
-    if (! write_long (fd, j, &sum))
-        goto writeerr;
-    if (! write_long (fd, B, &sum))
-        goto writeerr;
-    if (! write_long (fd, C, &sum))
-	goto writeerr;
-    if (! write_long (fd, nr, &sum))
-        goto writeerr;
-    for (i=0; i<10; i++) {
-        if (! write_long (fd, bpf[i], &sum))
-            goto writeerr;
-    }
-
-/* Write the data values */
-
-    if (! write_gwypnum (fd, x, &sum))
-        goto writeerr;
-    if (y != NULL && ! write_gwypnum (fd, y, &sum)) 
-        goto writeerr; 
-    if (! write_gwypnum (fd, gwQpow, &sum))
-	goto writeerr;
-
-/* Write the checksum */
-
-    if (_write (fd, &sum, sizeof (long)) != sizeof (long))
-        goto writeerr;
-
-/* Save the timers */
-
-    for (i=0; i<NBTIMERS; i++) {
-        if (gwyptimers[i+NBTIMERS] != 0.0) {
-                    // if the timer was running
-            gwypend_timer (i);// update and save it
-            if (! write_double (fd, gwyptimers[i], &sum)) {
-                gwypstart_timer (i);
-                // and then, restart it, even if write is in error!
-                goto writeerr;
-            }
-            if (! write_double (fd, gwyptimers[i+NBTIMERS], &sum)) {
-                // save the timer status
-                gwypstart_timer (i);
-                // and then, restart it, even if write is in error!
-                goto writeerr;
-            }
-            gwypstart_timer (i);
-                // and then, restart it!
-        }
-        else {
-            if (! write_double (fd, gwyptimers[i], &sum))
-                goto writeerr;	// save the timer
-            if (! write_double (fd, gwyptimers[i+NBTIMERS], &sum))
-                goto writeerr;	// save its status
-        }
-    }
-
-    _commit (fd);
-    _close (fd);
-
-/* Now rename the intermediate files */
-
-    if (TWO_BACKUP_FILES) {
-        _unlink (filename);
-        rename (newfilename, filename);
-    }
-    return (TRUE);
-
-/* An error occured.  Close and delete the current file. */
-
-writeerr:
-    _close (fd);
-    _unlink (newfilename);
-    return (FALSE);
-}
-
-int readFromFileBCQ (
-    char    *filename,
-    unsigned long *j,
-    unsigned long *B,
-    unsigned long *C,
-    unsigned long *nr,
-    unsigned long *bpf,
-    gwypnum x,
-    gwypnum y,
-    gwypnum	gwQpow)
-{
-    int	    fd;
-    unsigned long magicnum, version;
-    long    sum = 0, i;
-    char    errmsg[100];
-
-/* Open the intermediate file */
-
-    fd = _open (filename, _O_BINARY | _O_RDONLY);
-    if (fd < 0)
-        goto error;
-
-/* Read the file header */
-
-    if (_read (fd, &magicnum, sizeof (long)) != sizeof (long))
-        goto readerr;
-    if (magicnum != 0x9f2b3cd4)
-        goto readerr;
-    if (_read (fd, &version, sizeof (long)) != sizeof (long))
-        goto readerr;
-    if (version != 1 && version != 2)
-        goto readerr;
-
-/* Read the file data */
-
-    if (! read_long (fd, j, &sum))
-        goto readerr;
-    if (! read_long (fd, B, &sum))
-        goto readerr;
-    if (! read_long (fd, C, &sum))
-	goto readerr;
-    if (! read_long (fd, nr, &sum))
-        goto readerr;
-    for (i=0; i<10; i++) {
-        if (! read_long (fd, &bpf[i], &sum))
-            goto readerr;
-    }
-
-/* Read the values */
-
-    if (! read_gwypnum (fd, x, &sum))
-        goto readerr;
-    if (y != NULL && ! read_gwypnum (fd, y, &sum))
-        goto readerr; 
-    if (! read_gwypnum (fd, gwQpow, &sum))
-	goto readerr;
-
-/* Read and compare the checksum */
-
-    if (_read (fd, &i, sizeof (long)) != sizeof (long))
-        goto readerr;
-    if (i != sum)
-        goto readerr;
-
-/* Read the timers and their status */
-
-    for (i=0; i<NBTIMERS; i++) {
-        if (! read_double (fd, &gwyptimers[i], &sum))
-            goto readerr;
-        if (! read_double (fd, &gwyptimers[i+NBTIMERS], &sum))
-            goto readerr;
-    }
-
-    _close (fd);
-
-    if (debug) {
-        sprintf (errmsg, "Reading %s intermediate file, j = %lu\n", filename, *j);
-        OutputBoth (errmsg);
-    }
-
-    return (TRUE);
-
-/* An error occured.  Delete the current intermediate file. */
-/* Set stage to -1 to indicate an error. */
-
-readerr:
-    sprintf (errmsg,"Error reading %s intermediate file j = %lu\n", filename, *j);
-    OutputStr (errmsg);
-    _close (fd);
-error:
-    _unlink (filename);
-    return (FALSE);
-}
-
 int gmwriteToFile (
     char    *filename,
     unsigned long j,
@@ -2671,7 +2536,7 @@ error:
     return (FALSE);
 }
 
-int LwriteToFile (			// To save a Lucas sequence matrix and its Discriminant
+int LwriteToFile (					// To save a Lucas sequence matrix and its Discriminant
     char    *filename,
     unsigned long j,
     unsigned long D,
@@ -2792,7 +2657,7 @@ writeerr:
     return (FALSE);
 }
 
-int LreadFromFile (		// To restore a Lucas sequence matrix
+int LreadFromFile (					// To restore a Lucas sequence matrix
     char    *filename,
     unsigned long *j,
     unsigned long *D,
@@ -2918,8 +2783,8 @@ gwyprint(
 #define	PRP_TYPE_FERMAT_VAR	3	// Type 1 variant,b=2,d=1. Calculate a^(N-c) mod N.  PRP if result = a^-(c-1)
 #define	PRP_TYPE_SPRP_VAR	4	// Type 2 variant,b=2,d=1. Calculate a^((N-c)/2) mod N.  PRP if result = +/-a^-((c-1)/2)
 #define	PRP_TYPE_COFACTOR	5	// Cofactor variant.  Calculate a^(N*d-1) mod N*d.  PRP if result = a^(d-1) mod N
-#define PROTH_TYPE		6	// Proth prime variant. Calculate a^((N-1)/2) mod N with Jacobi (a,N) = -1. Prime iff result = -1
-#define	GMN_TYPE		7	// A special variant of Proth prime test
+#define PROTH_TYPE			6	// Proth prime variant. Calculate a^((N-1)/2) mod N with Jacobi (a,N) = -1. Prime iff result = -1
+#define	GMN_TYPE			7	// A special variant of Proth prime test
 #define	WAGSTAFF_TYPE		8	// A special variant of Cofactor SPRP test 
 
 // Primenet encourages programs to return type 1 PRP residues as that has been the standard for prime95, PFGW, LLR for many years.
@@ -3254,6 +3119,15 @@ void formatMsgForResultsFile (
 {
 	char	newbuf[2000];
 
+/* Output a USERID/COMPID prefix for result messages 
+
+	if (!USERID[0])
+		strcpy (newbuf, buf);
+	else if (!COMPID[0])
+		sprintf (newbuf, "UID: %s, %s", USERID, buf);
+	else
+		sprintf (newbuf, "UID: %s/%s, %s", USERID, COMPID, buf);
+
 /* Output the assignment ID too.  That alone should be enough info to */
 /* credit the correct userID.  However, we still output the user ID as it */
 /* is far more human friendly than an assignment ID. */
@@ -3288,24 +3162,28 @@ int rotategp (				/* Return false if failed due to memory allocation error */
         
 /* Convert current iteration to binary */
 
+//	vlo = 		// JP 24/04/20
         vlo = newgiant(2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	if (vlo == NULL) return (0);
+//	mvlo = newgiant ((p >> 3) + 5);		// JP 06/05/20
         mvlo = newgiant(2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	if (mvlo == NULL) return (0);
+//	modulus = newgiant ((p >> 3) + 5);	// JP 24/04/20
         modulus = newgiant(2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	if (modulus == NULL) return (0);
-	itog ((unsigned long)w->k, modulus);	// modulus is 2^p-1 (Mersenne),2^p+1 (Wagstaff or Gaussian Mersenne norm),k*2^p+1 Proth or k*2^p-1 Riesel
+	itog ((unsigned long)w->k, modulus);					// modulus is 2^p-1 (Mersenne),2^p+1 (Wagstaff or Gaussian Mersenne norm),k*2^p+1 Proth or k*2^p-1 Riesel
 	gshiftleft (p, modulus);
 	iaddg (w->c, modulus);
 	itog (1, vlo);
 	gshiftleft (shift_count, vlo);	// inverse of 2^shift_count modulo k*2^p+c
+//        invg (modulus,vlo);
         gwypinvg (modulus,vlo);
         gtog (modulus, mvlo);
 	if ((w->c>0) && ((w->prp_residue_type==GMN_TYPE)?shift_count&2:shift_count&1))
-		subg (vlo, mvlo);	// change the sign if necessary
+		subg (vlo, mvlo);					// change the sign if necessary
 	else
 		gtog (vlo, mvlo);
-	mulg (mvlo, v);			// restore unshifted v
+	mulg (mvlo, v);							// restore unshifted v
 	modg (modulus, v);
 	free (vlo);
 	free (modulus);
@@ -3506,6 +3384,7 @@ int writeSaveFile (
 	
 	_lseek (fd, CHECKSUM_OFFSET, SEEK_SET);
 	if (_write (fd, &sum, sizeof (unsigned long)) != sizeof (unsigned long)) return (FALSE);
+//	if (!write_checksum (fd, sum)) return (FALSE); // JP 27/11/23
 	closeWriteSaveFile (write_save_file_state, fd);
 	return (TRUE);
 
@@ -3654,20 +3533,23 @@ err:	_close (fd);
 #define ITER 0
 
 void writeresidue (
-    gwypnum s,		// The gwypnum data
-    giant m,		// The current external modulus
-    giant t,		// A temporary giant file	
-    char *b,		// The output buffer
-    const char *str,	// The tested number as a string
-    const int bit,	// The iteration or bit number
-    const int kind  	// Bit or Iteration
+    gwypnum s,	// The gwypnum data
+    giant m,	// The current external modulus
+    giant t,	// A temporary giant file	
+    char *b,	// The output buffer
+    const char *str,// The tested number as a string
+    const int bit,// The iteration or bit number
+    const int kind  // Bit or Iteration
 )
 {
     char restr[20];
 
-    gwyptogiant (s, t);	// The modulo reduction is done here
-    modg (m, t);	// External modulus and gwypnum's one may be different...
-    if (abs(t->sign) < 1)// make a 32 bit residue correct !!
+    gwyptogiant (s, t);
+    // The modulo reduction is done here
+    modg (m, t);
+    // External modulus and gwypnum's one may be different...
+    if (abs(t->sign) < 1)
+    // make a 32 bit residue correct !!
         sprintf (restr, "%08lX%08lX", (unsigned long)0, (unsigned long)0);
     else if (abs(t->sign) < 2)
         sprintf (restr, "%08lX%08lX", (unsigned long)0, (unsigned long)t->n[0]);
@@ -3726,7 +3608,8 @@ int aprcltest (int prptest, int verbose)		// Primality test using compiled APRCL
     if (prptest)
         retcode = mpz_strongbpsw_prp (n1);		// Strong BPSW PRP test
     else
-        retcode = mpz_aprtcle (n1, verbose);		// Prime test possibly with print out.
+        retcode = mpz_aprtcle (n1, verbose);
+        // Prime test possibly with print out.
     return ((retcode == -1)? 7 : retcode);		// Result code returned (-1 if in error...)
 }
 
@@ -3750,7 +3633,7 @@ int aprcltest (int prptest, int verbose)		// Primality test using external APRCL
         _close (ofd);
     }
     else
-        return (8);					// Could not create the file...
+        return (8);// Could not create the file...
 
 //	Initialisation de la structure wfstinfo avec les seules données requises
 
@@ -3786,7 +3669,7 @@ int aprcltest (int prptest, int verbose)		// Primality test using external APRCL
         NULL,
         &aprstinfo,
         &aprprinfo)) {
-            errcode = GetLastError ();			// Echec...
+            errcode = GetLastError ();	// Echec...
             sprintf (errbuf, "Error %lu while trying to create new process\n", errcode);
             OutputStr (errbuf);
             _unlink ("__pc__");
@@ -3817,7 +3700,7 @@ int gaprcltest (giant N, int prptest, int verbose) {
     if (gnbdg (N,10) > 10000)
         return (-1);    // Number too large...
     if (N->sign == 1) {
-			// Trial divisions test is sufficient for this small number...
+        // Trial divisions test is sufficient for this small number...
         return (isPrime (N->n[0]) ? 12 : 10);
     }
     gtoc (N, greatbuf, 10000);
@@ -3865,11 +3748,13 @@ int setupok (int errcode, giant bignumber, char *string, int *resultat)    // Te
 	}
         nbdg = gnbdg (bignumber, 10);
         gwypstart_timer(1);
-        if (nbdg > maxaprcl)	// Make only a Strong BPSW PRP test
+        if (nbdg > maxaprcl)
+            // Make only a Strong BPSW PRP test
             resaprcl = gaprcltest (bignumber, 1, 0);
-        else if (debug)		// Primality test while showing progress 
+        else if (debug)
+            // Primality test while showing progress 
             resaprcl = gaprcltest (bignumber, 0, 2);
-        else			// Primality test silently done
+        else// Primality test silently done
             resaprcl = gaprcltest (bignumber, 0, 0);
         gwypend_timer (1);
         if (resaprcl == 10) {
@@ -3966,7 +3851,8 @@ int isPRPg (
 
 /* Handle the cofactor case.  We calculated v = a^(N*KF-1) mod (N*KF).  We have a PRP if (v mod N) = (a^(KF-1)) mod N */
 
-            if (prp_residue_type == PRP_TYPE_COFACTOR) {	// Calculate k*b^n+c
+            if (prp_residue_type == PRP_TYPE_COFACTOR) {
+		// Calculate k*b^n+c
 		if (w->k > 0.0) {
 			kbnc = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
 			known_factors = newgiant ((w->n + (unsigned long)_log2(w->k)) + 5);
@@ -4068,8 +3954,9 @@ int isexpdiv (
 
     iaddg (-1, N);
     Nlen = bitlen (N);
-    nbdg = gnbdg (N, 10);	// Compute the number of decimal digits of the tested number.
-    *res = TRUE;		/* Assume the residue is one */
+    nbdg = gnbdg (N, 10);
+    // Compute the number of decimal digits of the tested number.
+    *res = TRUE;/* Assume the residue is one */
 
 /* Init filename */
 
@@ -4092,14 +3979,21 @@ int isexpdiv (
         sprintf (fmt_mask,
         "Resuming divisibility test of %%d^(N-1)-1 at bit %%ld [%%.%df%%%%]\n", PRECISION);
         sprintf (buf, fmt_mask, a, bit, pct);
+//		OutputStr (buf);
+//		if (verbose)
+//			writeResults (buf);
     }
 
 /* Otherwise, output a message indicating we are starting test */
 
     else {
-        gwypclear_timers ();	// Init. the timers
+        gwypclear_timers ();// Init. the timers
         sprintf (buf, "Starting divisibility test of %ld^(N-1)-1\n", a);
+//		OutputStr (buf);
+//		if (verbose)
+//			writeResults (buf);
         bit = 1;
+//		dbltogw ((double) a, x);
         itogwyp (a, x);
     }
 
@@ -4117,7 +4011,14 @@ int isexpdiv (
 #else
     sprintf (buf, "%s", fft_desc);
 #endif
-
+//	OutputStr (buf);
+//	LineFeed ();
+//	if (verbose) {
+#if !defined(WIN32) 
+//		strcat (buf, "\n");
+#endif
+//		writeResults (buf);
+//	}
     ReplaceableLine (1);
         /* Remember where replaceable line is */
 
@@ -6439,6 +6340,8 @@ Frobeniusresume:
 
 /* Do the PRP test */
 		
+//		asm_data = (struct gwasm_data *) ->asm_data;	// Get the struct pointer
+//		asm_data->SPREAD_CARRY_OVER_4_WORDS = TRUE;
 		gwypsetaddin (0);
 		gwypsetmulbyconst (Q);
 		iters = 0;
@@ -8791,7 +8694,6 @@ int gisPRPinternal (
 #define ABCWFS	26  // Format used for Wieferich search
 #define ABCGPT	27  // Format used for General prime test (APRCL)
 //#define ABCDP	28  // Format used for DivPhi()
-//#define ABCECK 29 // Format used for Extended square minus two
 
 int IsPRP (	    // General PRP test
 	unsigned long format, 
@@ -8872,25 +8774,23 @@ int IsPRP (	    // General PRP test
 	N =  newgiant ((bits >> 2) + 8);   // Allocate memory for N
 
  	if (format == ABCDP) {
-            gk = newgiant (strlen(sgk)/2 + 8);	// Allocate one byte per decimal digit + spares
-            ctog (sgk, gk);			// Convert k string to giant
-           M =  newgiant ((bits >> 2) + 8);   	// Allocate memory for M
+            M =  newgiant ((bits >> 2) + 8);   // Allocate memory for M
  		globalk = dk = (double)gk->n[0]; 
- 		fermat_only = TRUE; 		// 25/04/21
- 		itog (base, M);        		// 26/04/21 compute the correct modulus!
+ 		fermat_only = TRUE;  // 25/04/21
+ 		gtog (gb, M);        // 26/04/21 compute the correct modulus!
                 power (M, n);
-		mulg (gk, M);			// 08/09/24
+                addg (M, M);
                 iaddg (1, M);
  		for(usingDivPhi_m = n; usingDivPhi_m > 0; usingDivPhi_m--) {
  			sprintf (buf, "Starting test if %s divides Phi(%s^%d,2)\n", str, sgb, usingDivPhi_m);
 			OutputStr (buf);
- 			itog (base, N);
+ 			gtog (gb, N);
  			power (N, usingDivPhi_m);
  			iaddg (1, N);
  			retval = isPRPinternal (str, dk, base, n, incr, res);
  			if(!*res) break;
  		}
-		if(usingDivPhi_m<(int)n) {
+ 		if(usingDivPhi_m<(int)n) {
 			sprintf(buf, "Conclusion: %s Divides Phi(%s^%d,2)\n", str, sgb, usingDivPhi_m+1);
 			OutputBoth (buf);
 		}
@@ -9704,8 +9604,7 @@ int findgbpf (giant gbase) {    // find all prime factors of a large integer bas
 int Lucasequence (
 	giant modulus,
 	giant exponent,
-	unsigned long *P,	// These parameters must be passed by addresses	
-	unsigned long *Q,	// because  they may be updated internally by this function...
+	unsigned long P,
 	unsigned long base,
 	int jmin,
 	int jmax,
@@ -9714,12 +9613,12 @@ int Lucasequence (
 	int	*res)
 {
 	unsigned long bit, iters, D;
-	unsigned long frestart=FALSE;
-	unsigned long explen;
+	unsigned long bbits, mask=0x80000000, frestart=FALSE;
+	unsigned long ulone;
 //	unsigned long maxrestarts, ulone;
-	gwypnum x, y, gwinvD, gwinv2, gw2, gwP, gwQpow;
+	gwypnum x, y, gwinvD, gwinv2;
 	gwypnum a11, a12, a21, a22, b11, b12, b21, b22, c11, c12, c21, c22, p, pp, s;
-	giant	tmp, tmp2, gb;
+	giant	tmp, tmp2;
 	char	filename[20], fft_desc[256];
 	long	write_time = DISK_WRITE_TIME * 60;
 	long	j;
@@ -9744,10 +9643,7 @@ restart:
 	x = gwypalloc ();
 	y = gwypalloc ();
 	gwinvD = gwypalloc ();
-	gwP = gwypalloc ();
-	gw2 = gwypalloc ();
 	gwinv2 = gwypalloc ();
-	gwQpow = gwypalloc ();
 
 	a11 = gwypalloc ();		// allocate memory for matrix computing...
 	a12 = gwypalloc ();
@@ -9767,15 +9663,12 @@ restart:
 
 	tmp = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
 	tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);
-	gb = newgiant (16);
-	itog (base, gb);	// copy the base in a giant.
 
 /* Init, */
 
 
 	gtog (exponent, tmp2);
 //	gwypuldivg (base, tmp2);	// tmp2 = exponent/base
-	divg (gb, tmp2);		// tmp2 = exponent/base
 
 	Nlen = bitlen (tmp2);
 
@@ -9786,7 +9679,7 @@ restart:
 /* Optionally resume from save file and output a message */
 /* indicating we are resuming a test */
 
-	if (fileExists (filename) && readFromFileBCQ (filename, &bit, P, Q, &nrestarts, bpf, x, y, gwQpow)) {
+	if (fileExists (filename) && readFromFileB (filename, &bit, &P, &nrestarts, bpf, x, y)) {
 		char	fmt_mask[80];
 		double	pct;
 		pct = trunc_percent (bit * 100.0 / Nlen);
@@ -9797,7 +9690,7 @@ restart:
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
-		D = *P**P - 4**Q;
+		D = P*P - 4;
 	}
 
 /* Otherwise, output a message indicating we are starting test */
@@ -9806,33 +9699,32 @@ restart:
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
-		D = *P**P - 4**Q;
+		D = P*P - 4;
 		bit = 1;
-		itogwyp (2, x);		// Initial values
-		itogwyp (*P, y);
-		itogwyp (2, gw2);
-		itogwyp (*P, gwP);
-		itogwyp (1, gwQpow);    // 06/06/24
+//		dbltogw (2.0, x);			// Initial values
+//		dbltogw ((double)P, y);
+		itogwyp (2, x);			// Initial values
+		itogwyp (P, y);
 	}
 
 
-	itog (D, tmp);			// Compute inverse of D modulo N
+	itog (D, tmp);						// Compute inverse of D modulo N
+//	invg (modulus, tmp);
 	gwypinvg (modulus, tmp);
 	gianttogwyp (tmp, gwinvD);	// Convert it to gwypnum
-	gtog (modulus, tmp);		// Compute inverse of 2 modulo N
-	iaddg (1, tmp);			// Which is (N+1)/2
+	gtog (modulus, tmp);				// Compute inverse of 2 modulo N
+	iaddg (1, tmp);						// Which is (N+1)/2
 	gshiftright (1, tmp);
 	gianttogwyp (tmp, gwinv2);	// Convert it to gwypnum
 
-//	if (abs(*Q) <= GWMULBYCONST_MAX)	// 23/05/24
-	    gwypsetmulbyconst (*Q);
-//	else
-//	    gwypsetmulbyconst (1); 	// mulbyconst does not work if the constant is too big...
-	    
 /* Output a message about the FFT length */
 
 	gwypfft_description (fft_desc);
-	sprintf (buf, "%s, P = %lu, Q = %lu\n", fft_desc, *P, *Q);
+#ifdef WIN32
+	sprintf (buf, "%s, P = %d\n", fft_desc, (int)P);
+#else
+	sprintf (buf, "%s, P = %d", fft_desc, (int)P);
+#endif
 	OutputStr (buf);
 	LineFeed ();
 	if (verbose) {
@@ -9872,10 +9764,10 @@ restart:
 
 		gwypsetnormroutine (0, echk, 0);
 
-		if (*Q == 1) {
-		    if (bitval (tmp2, Nlen-bit)) {
-			gwypsetaddin (-(int)*P);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
+		if (bitval (tmp2, Nlen-bit)) {
+			gwypsetaddin (-(int)P);
+			if (/*(bit+26 < Nlen) && (bit > 26) &&*/
+				((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
                             if (cufftonly)
                                 gwypmul (y, x);
                             else
@@ -9887,9 +9779,9 @@ restart:
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 1)
-// 			We did x*y-P -> x that is v(n)*v(n+1)-P ->  V(n) that is : V(n) becomes V(2*n+1)
 			gwypsetaddin (-2);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
+			if (/*(bit+26 < Nlen) && (bit > 26) && */
+				((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
                             if (cufftonly)
                                 gwypsquare (y);
                             else if (zp || generic)
@@ -9907,149 +9799,27 @@ restart:
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 2)
-//			We did y*y-2 -> y that is V(n+1)*Vn+1)-2 ->  V(n+1) that is : V(n+1) becomes V(2*n+2)
-		    }
-		    else {
-			gwypsetaddin (-(int)*P);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
-                            if (cufftonly)
-                                gwypmul (x, y);
-                            else
-                                cuda_gwypmul (x, y, 3);
-                            care = FALSE;
-			}
-			else {
-                            gwypmul_carefully (x, y);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 3)
-// 			We did x*y-P -> y that is V(n)*V(n+1)-P -> V(n+1) that is : V(n+1) becomes V(2*n+1)
-			gwypsetaddin (-2);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
-                            if (cufftonly)
-                                gwypsquare (x);
-                            else if (zp || generic)
-                                cuda_gwypsquare (x, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (x,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (x,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (x,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (x);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 4)
-//			We did x*x-2 -> x that is V(n)*V(n)-2 -> V(n) that is : V(n) becomes V(2*n)
-		    }
 		}
 		else {
-		    gwypsetaddin (0);		// Reset addin constant.
-		    if (bitval (tmp2, Nlen-bit)) {
-			gwypcopy (gwP, p);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
-                            if (cufftonly) {
-                                gwypmul (y, x);
-                                gwypmul (gwQpow, p);
-			    }
-                            else {
-                                cuda_gwypmul (y, x, 3);
-				cuda_gwypmul (gwQpow, p, 3);
- 			    }
-                            care = FALSE;
-			}
-			else {
-                            gwypmul_carefully (y, x);
-                            gwypmul_carefully (gwQpow, p);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 1)
-			gwypsub (p, x);
-// 			We did x*y-P*Q^n -> x that is v(n)*v(n+1)-P*Q^n ->  V(n) that is : V(n) becomes V(2*n+1)
-			gwypcopy (gw2, pp);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
-                            if (cufftonly) {
-                                gwypsquare (y);
-				gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-				gwypmul (gwQpow, pp);
-				gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    }
-                            else {
-				if (zp || generic)
-				    cuda_gwypsquare (y, 3);
-				else if(bit==1 || it==0)  
-				    {cuda_gwypsquare (y,1);it=1;}
-				else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-				    cuda_gwypsquare (y,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-				else 
-				    cuda_gwypsquare (y,2);
-				gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-				cuda_gwypmul (gwQpow, pp, 3);
-				gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    }
-			    care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (y);
-			    gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-			    gwypmul_carefully (gwQpow, pp);
-			    gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 2)
-			gwypsub (pp, y);
-//			We did y*y-2*Q^(n+1) -> y that is V(n+1)*Vn+1)-2*Q^(n+1) ->  V(n+1) that is : V(n+1) becomes V(2*n+2)
-			gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
-                            if (cufftonly) {
-                                gwypsquare (gwQpow);
-			    }
-                            else if (zp || generic)
-                                cuda_gwypsquare (gwQpow, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (gwQpow,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (gwQpow,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (gwQpow,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (gwQpow);
-			    care = TRUE;
-			}
-			gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-		    }
-		    else {
-			gwypcopy (gwP, p);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
-                            if (cufftonly) {
+			gwypsetaddin (-(int)P);
+			if (/*(bit+26 < Nlen) && (bit > 26) && */
+				((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
+                            if (cufftonly)
                                 gwypmul (x, y);
-                                gwypmul (gwQpow, p);
-			    }
-                            else {
+                            else
                                 cuda_gwypmul (x, y, 3);
-				cuda_gwypmul (gwQpow, p, 3);
-			    }
                             care = FALSE;
 			}
 			else {
                             gwypmul_carefully (x, y);
-			    gwypmul_carefully (gwQpow, p);
-			    care = TRUE;
+                            care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 3)
-			gwypsub (p, y);
-// 			We did x*y-P*Q^n -> y that is V(n)*V(n+1)-P*Q^n -> V(n+1) that is : y = V(n+1) becomes y = V(2*n+1)
-			gwypcopy (gw2, pp);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
-                            if (cufftonly) {
+			gwypsetaddin (-2);
+			if (/*(bit+26 < Nlen) && (bit > 26) &&*/
+				((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
+                            if (cufftonly)
                                 gwypsquare (x);
-				gwypmul (gwQpow, pp);
-			    }
                             else if (zp || generic)
                                 cuda_gwypsquare (x, 3);
                             else if(bit==1 || it==0)  
@@ -10058,36 +9828,13 @@ restart:
                                 cuda_gwypsquare (x,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
                             else
                                 cuda_gwypsquare (x,2);
-			    cuda_gwypmul (gwQpow, pp, 3);
                             care = FALSE;
 			}
 			else {
                             gwypsquare_carefully (x);
-                            gwypmul_carefully (gwQpow, pp);
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 4)
-			gwypsub (pp, x);
-//			We did x*x-2*Q^n -> x that is V(n)*V(n)-2*Q^n -> V(n) that is : x = V(n) becomes x = V(2*n)
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
-                            if (cufftonly) {
-                                gwypsquare (gwQpow);
-			    }
-                            else if (zp || generic)
-                                cuda_gwypsquare (gwQpow, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (gwQpow,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (gwQpow,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (gwQpow,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (gwQpow);
-			    care = TRUE;
-			}
-		    }
 		}
 
  /* That iteration succeeded, bump counters */
@@ -10144,7 +9891,7 @@ restart:
 
 		if (saving || stopping) {
 			write_time = DISK_WRITE_TIME * 60;
-			if (! writeToFileBCQ (filename, bit, *P, *Q, nrestarts, bpf, x, y, gwQpow)) {
+			if (! writeToFileB (filename, bit, P, nrestarts, bpf, x, y)) {
 				sprintf (buf, WRITEFILEERR, filename);
 				OutputBoth (buf);
 				if (write_time > 600) write_time = 600;
@@ -10207,7 +9954,7 @@ restart:
 			char	interimfile[20];
 			sprintf (interimfile, "%.8s.%03lu",
 				 filename, bit / interimFiles);
-			if (! writeToFileBCQ (interimfile, bit, *P, *Q, nrestarts, bpf, x, y, gwQpow)) {
+			if (! writeToFileB (interimfile, bit, P, nrestarts, bpf, x, y)) {
 				sprintf (buf, WRITEFILEERR, interimfile);
 				OutputBoth (buf);
 			}
@@ -10226,59 +9973,66 @@ restart:
 	gwypcopy (x, y);			// Now, y = V((N+1)/base)
 	gwypsetnormroutine (0, 1, 1);	// set mul. by const.
 	gwypsetmulbyconst (2);
+//	gwypmul (gwinvD, a21);		// a21 = D^-1*2*V((N+1)/base+1) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, a21);	// a21 = D^-1*2*V((N+1)/base+1) modulo N
+            gwypmul (gwinvD, a21);
         else
             cuda_gwypmul (gwinvD, a21, 3);
 	CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (*P);
+	gwypsetmulbyconst (P);
+//	gwypmul (gwinvD, x);		// x =  D^-1*P*V((N+1)/base) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, x);	// x =  D^-1*P*V((N+1)/base) modulo N
+            gwypmul (gwinvD, x);
         else
             cuda_gwypmul (gwinvD, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
 	gwypsub (x, a21);		// a21 = D^-1*(2*V((N+1)/base+1)-P*V((N+1)/base)) = U(N+1)/base modulo N
+//	gwypmul (gwinvD, a11);		// a11 = D^-1*P*V((N+1)/base+1) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, a11);	// a11 = D^-1*P*V((N+1)/base+1) modulo N
+            gwypmul (gwinvD, a11);
         else
             cuda_gwypmul (gwinvD, a11, 3);
 	CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (2**Q);	// 28/05/24
+	gwypsetmulbyconst (2);
+//	gwypmul (gwinvD, y);		// xx = D^-1*2*V((N+1)/base) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, y);	// xx = D^-1*2*Q*V((N+1)/base) modulo N
+            gwypmul (gwinvD, y);
         else
             cuda_gwypmul (gwinvD, y, 3);
 	CHECK_IF_ANY_ERROR(y, (Nlen), Nlen, 6)
-	gwypsub (y, a11);		// a11 = D^-1*(P*V((N+1)/base+1)-2*Q*V((N+1)/base)) = U((N+1)/base+1) modulo N
+	gwypsub (y, a11);		// a11 = D^-1*(P*V((N+1)/base+1)-2*V((N+1)/base)) = U((N+1)/base+1) modulo N
 	gwypsetnormroutine (0, 1, 0);	// reset mul by const
+//	gwypmul (gwinv2, a22);		// a22 = 2^-1*V((N+1)/base)
         if (cufftonly)
-            gwypmul (gwinv2, a22);	// a22 = 2^-1*V((N+1)/base)
+            gwypmul (gwinv2, a22);
         else
             cuda_gwypmul (gwinv2, a22, 3);
 	CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//	gwypmul (gwinv2, a12);		// a12 = 2^-1*V((N+1)/base+1)
         if (cufftonly)
-            gwypmul (gwinv2, a12);	// a12 = 2^-1*V((N+1)/base+1)
+            gwypmul (gwinv2, a12);
         else
             cuda_gwypmul (gwinv2, a12, 3);
 	CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (*P);
+	gwypsetmulbyconst (P);
 	gwypsetnormroutine (0, 1, 1);	// set mul. by const.
 	gwypcopy (a11, x);		// x = U((N+1)/base+1)
+//	gwypmul (gwinv2, x);		// x = 2^-1*P*U((N+1)/base+1)
         if (cufftonly)
-            gwypmul (gwinv2, x);	// x = 2^-1*P*U((N+1)/base+1)
+            gwypmul (gwinv2, x);
         else
             cuda_gwypmul (gwinv2, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
 	gwypsub (x, a12);		// a12 = 2^-1(V((N+1)/base+1)-P*U((N+1)/base+1))
 	gwypcopy (a21, x);		// x = U((N+1)/base)
+//	gwypmul (gwinv2, x);		// x = 2^-1*P*U((N+1)/base)
         if (cufftonly)
-            gwypmul (gwinv2, x);	// x = 2^-1*P*U((N+1)/base)
+            gwypmul (gwinv2, x);
         else
             cuda_gwypmul (gwinv2, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
 	gwypsub (x, a22);		// a22 = 2^-1(V((N+1)/base)-P*U((N+1)/base))
 	gwypsetnormroutine (0, 1, 0);	// reset mul by const
-	gwypsetmulbyconst (*Q);		// reset the multiplicative constant. 06/08/24
 
 //	gwyptogiant (a21, tmp);		// tmp = U((N+1)/base) modulo N
 
@@ -10292,106 +10046,133 @@ restart:
 	gwypcopy (a21, b21);
 	gwypcopy (a22, b22);
 
+	bbits = base;
+	ulone = 1;
 	k = 1;
 //	printf("\n");			// for Verification
 	clearline (100);
-	explen = bitlen(gb);
+	while (!(bbits & mask)) {
+		ulone <<= 1;
+		bbits <<= 1;
+	}
+	bbits <<= 1;
+	ulone <<= 1;
 
-	while (k<explen) {		// Finish to compute U(N+1)
+	while (k<ulbitlen(base)) {		// Finish to compute U(N+1)
+//		printf ("%d",((bbits&mask)!=0));// Verification
 
 // Square the matrix
 
 		gwypcopy (a12, p);		// a12-->p
 		gwypcopy (a12, pp);		// a12-->pp
 		gwypadd3 (a11, a22, s);		// a11+a12-->s
+//		gwypmul (a21, p);			// a21*a12-->p
                 if (cufftonly)
-                    gwypmul (a21, p);		// a21*a12-->p
+                    gwypmul (a21, p);
                 else
                     cuda_gwypmul (a21, p, 3);
 		CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//		gwypsquare (a22);			// a22*a22-->a22
                 if (cufftonly)
-                    gwypsquare (a22);		// a22*a22-->a22
+                    gwypsquare (a22);
                 else
                     cuda_gwypsquare (a22, 3);
 		CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//		gwypmul (s, a21);			// (a11+a22)*a21-->a21 T
                 if (cufftonly)
-                    gwypmul (s, a21);		// (a11+a22)*a21-->a21 T
+                    gwypmul (s, a21);
                 else
                     cuda_gwypmul (s, a21, 3);
 		CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-		gwypadd (p, a22);		// a21*a12+a22*a22-->a22 T
+		gwypadd (p, a22);			// a21*a12+a22*a22-->a22 T
+//		gwypmul (s, a12);			// (a11+a22)*a12-->a12 T
                 if (cufftonly)
-                    gwypmul (s, a12);		// (a11+a22)*a12-->a12 T
+                    gwypmul (s, a12);
                 else
                     cuda_gwypmul (s, a12, 3);
 		CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//		gwypsquare (a11);			// a11*a11-->a11
                 if (cufftonly)
-                    gwypsquare (a11);		// a11*a11-->a11
+                    gwypsquare (a11);
                 else
                     cuda_gwypsquare (a11, 3);
 		CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
-		gwypadd (p, a11);		// a21*a12+a11*a11-->a11 T
+		gwypadd (p, a11);			// a21*a12+a11*a11-->a11 T
 
 // Multiply it if required
 
-		if (bitval (gb, bitlen(gb)-k-1)) {
+		if (bbits & mask) {
 			gwypcopy (a11, p);		// a11-->p
 			gwypcopy (a21, pp);		// a21-->pp
+//			gwypmul (b11, a11);	        // b11*a11-->a11
                         if (cufftonly)
-                            gwypmul (b11, a11);	        // b11*a11-->a11
+                            gwypmul (b11, a11);
                         else
                             cuda_gwypmul (b11, a11, 3);
 			CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
+//			gwypmul (b12, pp);		// b12*a21-->pp
                         if (cufftonly)
-                            gwypmul (b12, pp);		// b12*a21-->pp
+                            gwypmul (b12, pp);
                         else
                             cuda_gwypmul (b12, pp, 3);
 			CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
 			gwypadd (pp, a11);		// b11*a11+b12*a21-->a11 T
+//			gwypmul (b21, p);		// b21*a11-->p
                         if (cufftonly)
-                            gwypmul (b21, p);		// b21*a11-->p
+                            gwypmul (b21, p);
                         else
                             cuda_gwypmul (b21, p, 3);
 			CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//			gwypmul (b22, a21);	        // b22*a21-->a21
                         if (cufftonly)
-                            gwypmul (b22, a21);	        // b22*a21-->a21
+                            gwypmul (b22, a21);
                         else
                             cuda_gwypmul (b22, a21, 3);
 			CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
 			gwypadd (p, a21);		// b21*a11+b22*a21-->a21 T
 			gwypcopy (a12, p);		// a12-->p
 			gwypcopy (a22, pp);		// a22-->pp
+//			gwypmul (b11, a12);	        // b11*a12-->a12
                         if (cufftonly)
-                            gwypmul (b11, a12);	        // b11*a12-->a12
+                            gwypmul (b11, a12);
                         else
                             cuda_gwypmul (b11, a12, 3);
 			CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//			gwypmul (b12, pp);		// b12*a22-->pp
                         if (cufftonly)
-                            gwypmul (b12, pp);		// b12*a22-->pp
+                            gwypmul (b12, pp);
                         else
                             cuda_gwypmul (b12, pp, 3);
 			CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
 			gwypadd (pp, a12);		// b11*a12+b12*a22-->a12 T
+//			gwypmul (b21, p);		// b21*a12-->p
                         if (cufftonly)
-                            gwypmul (b21, p);		// b21*a12-->p
+                            gwypmul (b21, p);
                         else
                             cuda_gwypmul (b21, p, 3);
 			CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//			gwypmul (b22, a22);	        // b22*a22-->a22
                         if (cufftonly)
-                            gwypmul (b22, a22);	        // b22*a22-->a22
+                            gwypmul (b22, a22);
                         else
                             cuda_gwypmul (b22, a22, 3);
 			CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
 			gwypadd (p, a22);		// b21*a12+b22*a22-->a22 T
 
 		}
+		bbits <<= 1;
+		ulone <<= 1;
 		k++;
 	}
+//	printf ("\n");
+//	for (i=1; i<ulbitlen (base); i++) printf ("%lu", ulbitval (base, ulbitlen (base)-i-1));
+//	printf (" %d bits processed/%lu\n", k, ulbitlen(base));// Verification
 
 	gwyptogiant (a21, tmp);			// tmp = U(N+1) modulo N
 	ReplaceableLine (2);			/* Replace line */
 
 	if (!isZero (tmp)) {
+//	if (!gwiszero(a21)) {
 		*res = FALSE;				/* Not a prime */
 		if (abs(tmp->sign) < 2)		// make a 64 bit residue correct !!
 			sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp->n[0]);
@@ -10402,25 +10183,9 @@ restart:
 		else
 			sprintf (res64, "%04X%04X%04X%04X", tmp->n[3], tmp->n[2], tmp->n[1], tmp->n[0]);
 		if (IniGetInt(INI_FILE, (char*)"Verify", 0))
-			sprintf (buf, "%s is not prime. P = %lu, Q = %lu, Lucas RES64: %s", str, *P, *Q, res64);
-		else	{
-			sprintf (buf, "%s is not prime, although Fermat PSP! P = %lu, Q = %lu, Lucas RES64: %s", str, *P, *Q, res64);
-		}
-		if (possiblyfalsenegative < 3) {
-		    possiblyfalsenegative++;
-		    sprintf (buf, "%s may be a false negative. P = %lu, Q = %lu, Lucas RES64: %s, restarting with next FFT length.\n", str, *P, *Q, res64);
-		    OutputBoth (buf);
-		    will_try_larger_fft = 1;	// Default after a  Roundoff error in Lucasequence... 26/06/24
-		    frestart = 1;
-		    if (will_try_larger_fft) {
-			IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc = (IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1));
-			if (nbfftinc == maxfftinc)
-			    abonroundoff = TRUE;	// Don't accept any more Roundoff error.
-			_unlink (filename);             // restart from the beginning... 22/05/21
-		    }
-		}
+			sprintf (buf, "%s is not prime. P = %lu, Lucas RES64: %s", str, P, res64);
 		else
-		    possiblyfalsenegative = 0;
+			sprintf (buf, "%s is not prime, although Fermat PSP! P = %lu, Lucas RES64: %s", str, P, res64);
 	}
 	else {
 		sprintf (buf, "%s may be prime, trying to compute gcd's\n", str);
@@ -10429,47 +10194,57 @@ restart:
 		else
 			OutputStr (buf);
 		for (j=jmax; j>=jmin; j--) {
-			if (bpf[j] == 0)			// base prime factor already tested
+			if (bpf[j] == 1)			// base prime factor already tested
 				continue;
 			gwypcopy (c11, a11);			// Computing U((N+1)/q)
 			gwypcopy (c12, a12);
 			gwypcopy (c21, a21);
 			gwypcopy (c22, a22);
-			explen = ulbitlen(bpc[j]);
- 			if ((gformat == ABCECK) && (bpf[j] == 2))	// JP 04/04/24
-			    explen++;
-			k = 1;		// 23/08/24
-			while (k<explen) {			// Avoid to process extra zero bits.
-
+			bbits = bpc[j];
+			ulone = 1;
+			k = 1;
+			while (!(bbits & mask)) {
+				bbits <<= 1;
+				ulone <<= 1;
+			}
+			bbits <<= 1;
+			ulone <<= 1;
+			while (k<ulbitlen(bpc[j])) {	// Avoid to process extra zero bits.
+//				printf ("%d",((bbits&mask)!=0));// Verification
 
 // Square the matrix
 
 				gwypcopy (a12, p);		// a12-->p
 				gwypcopy (a12, pp);		// a12-->pp
 				gwypadd3 (a11, a22, s);		// a11+a12-->s
+//				gwypmul (a21, p);		// a21*a12-->p
                                 if (cufftonly)
-                                    gwypmul (a21, p);		// a21*a12-->p
+                                    gwypmul (a21, p);
                                 else
                                     cuda_gwypmul (a21, p, 3);
 				CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//				gwypsquare (a22);		// a22*a22-->a22
                                 if (cufftonly)
-                                    gwypsquare (a22);		// a22*a22-->a22
+                                    gwypsquare (a22);
                                 else
                                     cuda_gwypsquare (a22, 3);
 				CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//				gwypmul (s, a21);		// (a11+a22)*a21-->a21 T
                                 if (cufftonly)
-                                    gwypmul (s, a21);		// (a11+a22)*a21-->a21 T
+                                    gwypmul (s, a21);
                                 else
                                     cuda_gwypmul (s, a21, 3);
 				CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
 				gwypadd (p, a22);		// a21*a12+a22*a22-->a22 T
+//				gwypmul (s, a12);		// (a11+a22)*a12-->a12 T
                                 if (cufftonly)
-                                    gwypmul (s, a12);		// (a11+a22)*a12-->a12 T
+                                    gwypmul (s, a12);
                                 else
                                     cuda_gwypmul (s, a12, 3);
 				CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//				gwypsquare (a11);		// a11*a11-->a11
                                 if (cufftonly)
-                                    gwypsquare (a11);		// a11*a11-->a11
+                                    gwypsquare (a11);
                                 else
                                     cuda_gwypsquare (a11, 3);
 				CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
@@ -10477,111 +10252,113 @@ restart:
 
 // Multiply it if required
 
-
-				if (ulbitval (bpc[j], explen-k-1)) {
+				if (bbits & mask) {
 					gwypcopy (a11, p);	// a11-->p
 					gwypcopy (a21, pp);	// a21-->pp
+//					gwypmul (b11, a11);	// b11*a11-->a11
                                         if (cufftonly)
-                                            gwypmul (b11, a11);	// b11*a11-->a11
+                                            gwypmul (b11, a11);
                                         else
                                             cuda_gwypmul (b11, a11, 3);
 					CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
+//					gwypmul (b12, pp);	// b12*a21-->pp
                                         if (cufftonly)
-                                            gwypmul (b12, pp);	// b12*a21-->pp
+                                            gwypmul (b12, pp);
                                         else
                                             cuda_gwypmul (b12, pp, 3);
 					CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
 					gwypadd (pp, a11);	// b11*a11+b12*a21-->a11 T
+//					gwypmul (b21, p);	// b21*a11-->p
                                         if (cufftonly)
-                                            gwypmul (b21, p);	// b21*a11-->p
+                                            gwypmul (b21, p);
                                         else
                                             cuda_gwypmul (b21, p, 3);
 					CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//					gwypmul (b22, a21);	// b22*a21-->a21
                                         if (cufftonly)
-                                            gwypmul (b22, a21);	// b22*a21-->a21
+                                            gwypmul (b22, a21);
                                         else
                                             cuda_gwypmul (b22, a21, 3);
 					CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
 					gwypadd (p, a21);	// b21*a11+b22*a21-->a21 T
 					gwypcopy (a12, p);	// a12-->p
 					gwypcopy (a22, pp);	// a22-->pp
+//					gwypmul (b11, a12);	// b11*a12-->a12
                                         if (cufftonly)
-                                            gwypmul (b11, a12);	// b11*a12-->a12
+                                            gwypmul (b11, a12);
                                         else
                                             cuda_gwypmul (b11, a12, 3);
 					CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//					gwypmul (b12, pp);	// b12*a22-->pp
                                         if (cufftonly)
-                                            gwypmul (b12, pp);	// b12*a22-->pp
+                                            gwypmul (b12, pp);
                                         else
                                             cuda_gwypmul (b12, pp, 3);
 					CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
 					gwypadd (pp, a12);	// b11*a12+b12*a22-->a12 T
+//					gwypmul (b21, p);	// b21*a12-->p
                                         if (cufftonly)
-                                            gwypmul (b21, p);	// b21*a12-->p
+                                            gwypmul (b21, p);
                                         else
                                             cuda_gwypmul (b21, p, 3);
 					CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//					gwypmul (b22, a22);	// b22*a22-->a22
                                         if (cufftonly)
-                                            gwypmul (b22, a22);	// b22*a22-->a22
+                                            gwypmul (b22, a22);
                                         else
                                             cuda_gwypmul (b22, a22, 3);
 					CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
 					gwypadd (p, a22);	// b21*a12+b22*a22-->a22 T
 
 				}
+				bbits <<= 1;
+				ulone <<= 1;
 				k++;
 			}
-			gwyptogiant (a21, tmp);
-
+//		printf ("\n");		// Verification
+//		for (i=1; i<ulbitlen (bpc[j]); i++) printf ("%lu", ulbitval (bpc[j], ulbitlen (bpc[j])-i-1));			// Verification
+//		printf (" %d bits processed/%lu\n", k, ulbitlen(bpc[j]));// Verification
+		    gwyptogiant (a21, tmp);
 			if (isZero (tmp)) {
-				if (bpf[j] == 1) {
-					gtoc(gbpf[j], bpfstring, strlen(sgb));
-					sprintf (buf, "%s may be prime, but N divides U((N+1)/%s), P = %lu, Q = %lu,\n", str, bpfstring, *P, *Q);
-				}
-				else
-					sprintf (buf, "%s may be prime, but N divides U((N+1)/%lu), P = %lu, Q = %lu,\n", str, bpf[j], *P, *Q);
-				OutputStr (buf);
+				sprintf (buf, "%s may be prime, but N divides U((N+1)/%lu), P = %lu\n", str, bpf[j], P);
 				if (verbose)
-					writeResults (buf);	
+					OutputBoth (buf);
+				else
+					OutputStr (buf);
 				frestart = TRUE;
 				_unlink (filename);
 				continue;
+//				break;
 			}
 			else {
+//				gcdg (modulus, tmp);
 				gwypgcdg (modulus, tmp);
 				if (isone (tmp)) {
-					if (bpf[j] == 1) {
-						gtoc(gbpf[j], bpfstring, strlen(sgb));
-						sprintf (buf, "U((N+1)/%s) is coprime to N!\n", bpfstring);
-					}
-					else
-						sprintf (buf, "U((N+1)/%lu) is coprime to N!\n", bpf[j]);
+					sprintf (buf, "U((N+1)/%lu) is coprime to N!\n", bpf[j]);
 					OutputStr (buf);
 					if (verbose)
 						writeResults (buf);	
-					bpf[j] = 0;
+					bpf[j] = 1;
 				}
 				else {
 					*res = FALSE;	/* Not a prime */
 					if (IniGetInt(INI_FILE, (char*)"Verify", 0))
-						sprintf (buf, "%s is not prime, although Lucas PSP!! (P = %lu, Q = %lu)", str, *P, *Q);
+						sprintf (buf, "%s is not prime, although Lucas PSP!! (P = %lu)", str, P);
 					else
-						sprintf (buf, "%s is not prime, although Fermat and Lucas PSP!! (P = %lu, Q = %lu)", str, *P, *Q);
+						sprintf (buf, "%s is not prime, although Fermat and Lucas PSP!! (P = %lu)", str, P);
 					break;
 				}
 			}
 		}
 	}
 
-	if (*res && !frestart) {
-	    sprintf (buf, "%s is prime! (%d decimal digits, P = %lu, Q = %lu)", str, nbdg, *P, *Q);
-	    possiblyfalsenegative = 0;
-	}
+	if (*res && !frestart)
+		sprintf (buf, "%s is prime! (%d decimal digits, P = %lu)", str, nbdg, P);
 
-	care = FALSE;		// Reset the "unrecoverable" condition.
+	care = FALSE;// Reset the "unrecoverable" condition.
 	gwypfree (tmp);
 	gwypfree (tmp2);
-	gwypfree (x);		// Clean up
+	gwypfree (x);			// Clean up
 	gwypfree (y);
 	gwypfree (gwinvD);
 	gwypfree (gwinv2);
@@ -10604,6 +10381,7 @@ restart:
 /* Cleanup and return */
 
 	Nlen = bitlen (N);
+//	gwypdone ();
 	_unlink (filename);
 	lasterr_point = 0;
 
@@ -10619,11 +10397,11 @@ error:
 	Nlen = bitlen (N);
 	gwypfree (tmp);
 	gwypfree (tmp2);
-	gwypfree (x);		// Clean up
+	gwypfree (x);				// Clean up
 	gwypfree (y);
 	gwypfree (gwinvD);
 	gwypfree (gwinv2);
-	gwypfree (a11);		// Clean up the matrix
+	gwypfree (a11);			// Clean up the matrix
 	gwypfree (a12);
 	gwypfree (a21);
 	gwypfree (a22);
@@ -10666,8 +10444,6 @@ error:
 
 /* Restart */
 
-	will_try_larger_fft = 1;	// Default after a  Roundoff error in Lucasequence... 26/06/24
-
 	if (will_try_larger_fft) {
             IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc =  IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1);
             if (nbfftinc == maxfftinc)
@@ -10682,7 +10458,6 @@ error:
 int plusminustest ( 
 	char *sgk,
 	unsigned long base,
-	giant gb,
 	unsigned long n, 
 	int incr,
 	unsigned long shift,
@@ -10690,12 +10465,13 @@ int plusminustest (
 { 
 	char	filename[20], buf[sgkbufsize+256], str[sgkbufsize+256], sgk1[sgkbufsize], fft_desc[256], oldres64[17]; 
 	unsigned long bits, explen, bbits, iters, bit, mask=0x80000000, frestart=FALSE;
-	unsigned long newa, maxrestarts, ulone, P = 3, Q = 1, /*maxrestartsP = 10,*/ factorized_part = 0;
+	unsigned long newa, maxrestarts, ulone, factorized_part = 0;
+//	uint32_t hi = 0, lo = 0;
 	double dk;
 	giant tmp, tmp2, tmp3;
 	gwypnum x, y;
-	long	a, write_time = DISK_WRITE_TIME * 60;
-	int	echk, saving, stopping, jmin, jmax, j,/*D,*/ retval, Psample;
+	long	a, P, write_time = DISK_WRITE_TIME * 60;
+	int	echk, saving, stopping, jmin, jmax, j, retval, Psample;
 	time_t	start_time, current_time;
 	double	reallyminerr = 1.0;
 	double	reallymaxerr = 0.0;
@@ -10708,24 +10484,11 @@ int plusminustest (
 		iaddg (-1, gk);
 		sprintf (str, "%lu^%lu-%lu^%lu%c%d", base, n_orig+ndiff, base, n_orig, incr < 0 ? '-' : '+', abs(incr));
 	}
-	else if (format == ABCECK) {	
-		// Compute gk = (base^n)/2+incr,  which is odd and < sqrt(N) as unfactorized part of N+1
-	    bits = n*(unsigned long)ceil(log ((double)base)/log (2.0));
-	    gk = newgiant ((bits >> 2) + 8);
-	    itog (base, gk);
-	    power (gk, n);
-	    gshiftright (1, gk);
-	    iaddg (incr, gk);
-	    if ((incr > 0))
-		sprintf (str, "(%lu^%lu+1)^2-2", base, n);
-	    else
-		sprintf (str, "(%lu^%lu-1)^2-2", base, n);
-	}
         else {
             gk = newgiant (strlen(sgk)/2 + 8);	// Allocate one byte per decimal digit + spares
-            ctog (sgk, gk);		  	// Convert k string to giant
-            gshiftleft (shift, gk);	   	// Shift k multiplier if requested
-            gtoc (gk, sgk1, sgkbufsize);   	// Updated k string
+            ctog (sgk, gk);		   // Convert k string to giant
+            gshiftleft (shift, gk);	   // Shift k multiplier if requested
+            gtoc (gk, sgk1, sgkbufsize);   // Updated k string
             if (!strcmp(sgk1, "1"))
 		sprintf (str, "%lu^%lu%c%d", base, n_orig, (incr < 0) ? '-' : '+', abs(incr));
             else
@@ -10736,11 +10499,9 @@ int plusminustest (
 
 //	Be sure the base does not divide the gk multiplier :
 
-	if (!isone(gk) && (gformat != ABCDN) && (gformat != ABCDNG) && (gformat != ABCECK)) {
-	    while (!(gmodi (base, gk))) {
+	while (!(gmodi (base, gk))) {
 		gwypuldivg (base, gk);
 		n++;
-	    }
 	}
 
 	if ((int)klen != bitlen(gk))	// Has k been updated ?
@@ -10755,24 +10516,23 @@ int plusminustest (
 
 //	Compute the number we are testing.
 
-	itog (base, N);
-	power (N, n);
-	if (gformat == ABCECK)	// 2*gk*gb^n is the factorized part of N+1 for the Morrison test.
-	    gshiftleft (1, N);
+	itog (base, M);
+	power (M, n-1);
+        gtog (M, N);
+        ulmulg (base, N);
 
-	Nlen = bitlen (N); 	// Bit length of base^n
+	Nlen = bitlen (N); // Bit length of base^n
 
-	mulg (gk, N);      	// N is now gk*base^n
-	gtog (N, M);		// 14/08/24
+	mulg (gk, N);      // N is now gk*base^n
+        mulg (gk, M);      // M = (N-incr)/base         
 
-	iaddg ((gformat==ABCECK)?-1:incr, N);	// N.B. : N is the modulus, M is the exponent for the Morrison test
-	
+	iaddg (incr, N);   // N = gk*base^n+incr
 
 	klen = bitlen(gk);
 
-        if (format == ABCDN && n == ndiff) { 		// Batalov 31/05/23
+        if (format == ABCDN && n == ndiff) { 			// Batalov 31/05/23
                 klen = 1; generic = FALSE; dk = 1.0;
-                globalb = base;
+                globalb = base /*= gb->n[0]*/;
         } else
 	if (klen > 53) {	// we must use generic reduction
 		dk = 0.0;
@@ -10803,19 +10563,19 @@ int plusminustest (
             return retval;
 	}
 
-	Nlen = bitlen (N); 					// Bit length of N
-	
-	findbpf (base);	   					// Factorize the base
+	Nlen = bitlen (N); // Bit length of N
+	findbpf (base);	   // Factorize the base
 	for (jmax=9; (jmax>0) && !bpf[jmax]; jmax--);
-	jmin = 0;						// Choose the minimum required factored part.
-	factorized_part = 0;
-	if (jmax) {						// The base is composite...
+	jmin = 0;							// Choose the minimum required factored part.
+	if (jmax) {							// The base is composite...
+//            factorized_part = bitlen (gk);				// J.P. 20/07/23
 		for (j=jmax; j>0; j--) {
 			factorized_part += (unsigned long)floor(n*vpf[j]*log ((double)bpf[j])/log(2.0));
 			if ((2*factorized_part) > Nlen)
 				break;
 		}
 		jmin = j;
+//	}
 		sprintf (buf, "Base factorized as : ");
 
 		for (j=0; j<=jmax; j++) {
@@ -10873,9 +10633,11 @@ int plusminustest (
 		else
 			P = Psample;
 	}
-	// The Discriminant for the Morrison test
-	// D = P^2 - 4*Q
+											// The Discriminant for the Morrison test
+//	D = P*P-4;								// D = P^2 - 4*Q with Q = 1
 
+
+// restart:
 
 /* Setup the gwypnum code */
 
@@ -10883,22 +10645,25 @@ int plusminustest (
 restart:
 
 	*res = TRUE;
+//	M = newgiant ((bits >> 2) + 16);	// Allocate memory for M
 	tmp = newgiant ((bits >> 2) + 16);	// Allocate memory for tmp
 	gtog (N, tmp);
 	iaddg (-1, tmp);			// tmp = N-1
 
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-	if ((gformat != ABCECK) && (incr == +1)) {	// Pocklington test.
+	if (incr == +1) {
 		gwypsetmaxmulbyconst (abs(a));
-                gwypuldivg (base, tmp);          // tmp = (N-1)/base
+                gtog (M,tmp);                   // tmp = (N-1)/base
 		explen = bitlen (tmp);
-                if (format == ABCDN && n == ndiff) {	// Batalov 31/05/23
+                if (format == ABCDN && n == ndiff) {		// Batalov 31/05/23
                         dk = 1.0;
                         if (!setupok (gwypsetup (dk, base, 3*ndiff, +1, N), N, str, res)) {
                                 gwypfree(gk);
                                 gwypfree(N);
                                 gwypfree (M);
                                 gwypfree (tmp);
+//                                gwypfree (tmp2);
+//                                gwypfree (tmp3);
                                 *res = FALSE;           // Not proven prime...
                                 return FALSE;
                         }
@@ -10917,6 +10682,8 @@ restart:
 	}
 	else {
 		gwypsetmaxmulbyconst (max(abs(a), abs(P)));
+//		gtog (N, M);
+//		iaddg (1, M);
 		explen = bitlen (tmp);
 		if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
 			gwypfree(gk);
@@ -10951,6 +10718,7 @@ restart:
 /* Optionally resume from save file and output a message */
 /* indicating we are resuming a test */
 
+	//cuda if (fileExists (filename) && readFromFileB (filename, &bit, &a, &nrestarts, bpf, x, y)) {
 	if (fileExists (filename) && readFromFileB (filename,(unsigned long *) &bit,(unsigned long *) &a, &nrestarts, bpf, x, y)) {
 		char	fmt_mask[80];
 		double	pct;
@@ -10958,7 +10726,7 @@ restart:
 		sprintf (fmt_mask,
 			 "Resuming N%%c%%d prime test of %%s at bit %%ld [%%.%df%%%%]\n",
 			 PRECISION);
-		sprintf (buf, fmt_mask, ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str, bit, pct);
+		sprintf (buf, fmt_mask, (incr < 0) ? '+' : '-', abs(incr), str, bit, pct);
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
@@ -10968,21 +10736,22 @@ restart:
 
 	else {
 		if (frestart) {
-			sprintf (buf, "Restarting N%c%d prime test of %s\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str);
+			sprintf (buf, "Restarting N%c%d prime test of %s\n", (incr < 0) ? '+' : '-', abs(incr), str);
 			frestart = FALSE;
 		}
 		else {
 			gwypclear_timers ();		// Init. timers
                         if (showdigits)
-                            sprintf (buf, "Starting N%c%d prime test of %s (%d decimal digits)\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str, nbdg);
+                            sprintf (buf, "Starting N%c%d prime test of %s (%d decimal digits)\n", incr < 0 ? '+' : '-', abs(incr), str, nbdg);
                         else
-                            sprintf (buf, "Starting N%c%d prime test of %s\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str);
+                            sprintf (buf, "Starting N%c%d prime test of %s\n", incr < 0 ? '+' : '-', abs(incr), str);
 		}
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
 		bit = 1;
 		itogwyp (a, x);
+//		dbltogw ((double)a, x);
 	}
 
 /* Get the current time */
@@ -11012,7 +10781,7 @@ restart:
 
 /* Init the title */
 
-	if ((incr > 0) && (gformat != ABCECK))
+	if (incr > 0)
 		title ((char*)"Pocklington prime test in progress...");
 	else
 		title ((char*)"Fermat PRP test in progress...");
@@ -11046,7 +10815,7 @@ restart:
 			gwypsetnormroutine (0, echk, 0);
 		}
 
-		if (((bit != lasterr_point) || !maxerr_recovery_mode[6])) {
+		if (/*(bit+25 < explen) && (bit > 25) && */((bit != lasterr_point) || !maxerr_recovery_mode[6])) {
                     if (cufftonly)
                         gwypsquare (x);
                     else if (zp || generic)
@@ -11177,8 +10946,9 @@ restart:
 
 	clearline (100);
 
-	if ((incr == +1) && (gformat != ABCECK)) {
+	if (incr == +1) {
 		int k;		// J.P. 08/08/23
+//		int i;		// For verification...
 		care = TRUE;	// All following errors are considered unrecoverable...
 		bbits = base;	// base as a bit chain
 		ulone = 1;
@@ -11192,6 +10962,7 @@ restart:
 		gwypcopy (x, y);		// y == x == a^(N-1)/base modulo N
 		gwypsetnormroutine (0, 1, 0);
 		while (k<ulbitlen(base)) {	// Avoid to process extra zero bits.
+//		    printf ("%d",((bbits&mask)!=0));// Verification
 		    k++;
                     if (cufftonly)
                         gwypsquare (x);
@@ -11208,7 +10979,11 @@ restart:
                     bbits <<= 1;
                     ulone <<= 1;
 		}
-	}
+//		printf ("\n");		// Verification
+//		for (i=1; i<ulbitlen (base); i++) printf ("%lu", ulbitval (base, ulbitlen (base)-i-1));
+//		printf (" %d bits processed/%lu\n", k, ulbitlen(base));// Verification
+
+}
 
 /* See if we've found a probable prime.  If not, format a 64-bit residue. */
 /* Old versions of PRP used a non-standard 64-bit residue, computing */
@@ -11248,31 +11023,30 @@ restart:
 	if (*res) {
 		gwypend_timer (1);
 		_unlink (filename);
-		if ((incr == -1) || (gformat == ABCECK)) {		// Morrison test ; start the Lucas sequence
+		if (incr == -1) {				// Morrison test ; start the Lucas sequence
 			gwypfree (x);
 			gwypfree (y);
 			sprintf (buf, "%s may be prime. Starting Lucas sequence...\n", str);
 			IniWriteInt(INI_FILE, (char*)"PRPdone", 1);
 DoLucas:
 			do {
-				retval = Lucasequence (N, M, &P, &Q, base, jmin, jmax, str, buf, res);
-				if (retval == -2) {			// Restart required using next base
+				retval = Lucasequence (N, M, P, base, jmin, jmax, str, buf, res);
+				if (retval == -2) {		// Restart required using  base
 					nrestarts++;
 					if (nrestarts > maxrestarts) {
-						sprintf (buf, "Giving up after %lu restarts...\n", nrestarts);
+						sprintf (buf, "Giving up after %lu restarts...", nrestarts);
 						frestart = FALSE;
 						*res = FALSE;		// Not proven prime...
 						retval = TRUE;
 						break;
 					}
 					IniWriteInt (INI_FILE, (char*)"NRestarts", nrestarts);
-					if (!possiblyfalsenegative)	// 11/07/24
-					    Q++;			// 08/06/24
-				/*D = */generalLucasBase (N, (uint32_t*)&P, (uint32_t*)&Q);
+					P = genLucasBaseP (N, P+1);
 					IniWriteInt (INI_FILE, (char*)"LucasBaseP", P);
+//					D = P*P-4;
 				}
 				if (retval < 0)	{		// Restart required for any reason
-					sprintf (buf, "Restarting Lucas sequence with P = %lu, Q = %lu\n", P, Q);
+					sprintf (buf, "Restarting Lucas sequence with P = %lu\n", P);
 					gwypdone ();
 								// Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
@@ -11301,7 +11075,6 @@ DoLucas:
 				*res = FALSE;
 				return FALSE;
 			}
-			IniWriteString (INI_FILE, (char*)"LucasBaseP", NULL);	// 11/07/24
 		}
 		else {	// Pocklington test ; compute the gcd's
                     sprintf (buf, "Computing GCD'S...");
@@ -11310,7 +11083,8 @@ DoLucas:
                     OutputStr (buf);
                     for (j=jmax; j>=jmin; j--) {
 			int k;			// J.P. 08/08/23
-                        if (bpf[j] == 0)	// J.P. 21/07/23
+//			int i;			// For verification...
+                        if (bpf[j] == /*1*/0)	// J.P. 21/07/23
                             // base prime factor already tested
                             continue;
                         gwypcopy (y, x);    // Computing a^((N-1)/q)
@@ -11324,6 +11098,7 @@ DoLucas:
                         bbits <<= 1;
 			ulone <<= 1;
                         while (k<ulbitlen(bpc[j])) {	// Avoid to process extra zero bits.
+//			    printf ("%d",((bbits&mask)!=0));// Verification
 			    k++;
                             if (cufftonly)
                                 gwypsquare (x);
@@ -11346,6 +11121,9 @@ DoLucas:
                             bbits <<= 1;
                             ulone <<= 1;
                         }
+//			printf ("\n");// Verification
+//			for (i=1; i<ulbitlen (bpc[j]); i++) printf ("%lu", ulbitval (bpc[j], ulbitlen (bpc[j])-i-1));// Verification
+//			printf (" %d bits processed/%lu\n", k, ulbitlen(bpc[j]));// Verification
                         gwyptogiant (x, tmp);
 			if (format == ABCDN && n == ndiff) modg (N, tmp); // Batalov 31/05/23
                         if (isone (tmp)) {
@@ -11380,13 +11158,14 @@ DoLucas:
                             iaddg (-1, tmp);
 			    if (format == ABCDN && n == ndiff) modg (N, tmp);
 			    // this one is likely unnecessary ; Batalov 31/05/23
+			    // gcdg (N, tmp);
                             gwypgcdg (N, tmp);
                             if (isone (tmp)) {
                                 sprintf (buf, "%ld^((N-1)/%lu)-1 is coprime to N!\n", a, bpf[j]);
                                 OutputStr (buf);
                                 if (verbose)
                                     writeResults (buf);
-                                bpf[j] = 0;	// J.P. 21/07/23
+                                bpf[j] = /*1*/0;// J.P. 21/07/23
                                 // success for this prime factor of the base, continue
                             }
                             else {
@@ -11441,6 +11220,7 @@ DoLucas:
 /* Output the final timings */
 
 	gwypend_timer (1);
+//	sprintf (buf+strlen(buf)-1, "  Time: ");
 	gwypwrite_timer (buf+strlen(buf), 1, TIMER_CLR | TIMER_NL); 
 	if (!frestart) {
 		OutputBoth (buf);
@@ -11463,6 +11243,7 @@ DoLucas:
 	lasterr_point = 0;
 	if (frestart)
 		goto restart;
+//	gwypdone ();
 	if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
 		IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
 	return (TRUE);
@@ -11470,6 +11251,7 @@ DoLucas:
 /* An error occured, sleep, then try restarting at last save point. */
 
 error:
+//	gwypfree (M);
 	gwypfree (tmp);
 	gwypfree (tmp2);
 	gwypfree (tmp3);
@@ -11485,6 +11267,7 @@ error:
             gwypfree (N);
             gwypfree (M);
             gwypfree (gk);
+//            gwypdone ();
             _unlink (filename);
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
@@ -11504,6 +11287,7 @@ error:
 /* Sleep five minutes before restarting */
 
 	if (sleep5 && ! SleepFive ()) { 
+//            gwypdone ();
             gwypfree (M);
             return (FALSE);
 	}
@@ -11516,6 +11300,7 @@ error:
                 abonroundoff = TRUE;	// Don't accept any more Roundoff error.
             _unlink (filename);
 	}
+//        gwypdone ();    // JP 26/11/18
 	goto restart;
 
 }
@@ -11523,8 +11308,7 @@ error:
 int gLucasequence (
 	giant modulus,
 	giant exponent,
-	unsigned long *P,	// These parameters must be passed by addresses	
-	unsigned long *Q,	// because  they may be updated internally by this function...
+	unsigned long P,
 	giant gb,
 	int jmin,
 	int jmax,
@@ -11534,7 +11318,7 @@ int gLucasequence (
 {
 	unsigned long bit, iters, D, explen;
 	unsigned long frestart=FALSE;
-	gwypnum x, y, gwinvD, gwinv2, gw2, gwP, gwQpow;
+	gwypnum x, y, gwinvD, gwinv2;
 	gwypnum a11, a12, a21, a22, b11, b12, b21, b22, c11, c12, c21, c22, p, pp, s;
 	giant	tmp, tmp2;
 	char	filename[20], fft_desc[256];
@@ -11561,9 +11345,6 @@ restart:
 	y = gwypalloc ();
 	gwinvD = gwypalloc ();
 	gwinv2 = gwypalloc ();
-	gw2 = gwypalloc ();
-	gwP = gwypalloc ();
-	gwQpow = gwypalloc ();
 
 	a11 = gwypalloc ();		// allocate memory for matrix computing...
 	a12 = gwypalloc ();
@@ -11587,24 +11368,19 @@ restart:
 /* Init, */
 
 
-
 	gtog (exponent, tmp2);
-
-	gwypdivg (gb, tmp2);	// tmp2 = exponent/base
-
+//	gwypdivg (gb, tmp2);	// tmp2 = exponent/base
 
 	Nlen = bitlen (tmp2);
-
 
 /* Init filename */
 
 	tempFileName (filename, 'L', N);
 
-
 /* Optionally resume from save file and output a message */
 /* indicating we are resuming a test */
 
-	if (fileExists (filename) && readFromFileBCQ (filename, &bit, P, Q, &nrestarts, bpf, x, y, gwQpow)) {
+	if (fileExists (filename) && readFromFileB (filename, &bit, &P, &nrestarts, bpf, x, y)) {
 		char	fmt_mask[80];
 		double	pct;
 		pct = trunc_percent (bit * 100.0 / Nlen);
@@ -11615,7 +11391,7 @@ restart:
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
-		D = *P**P - 4**Q;
+		D = P*P - 4;
 	}
 
 /* Otherwise, output a message indicating we are starting test */
@@ -11624,16 +11400,17 @@ restart:
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
-		D = *P**P - 4**Q;
+		D = P*P - 4;
 		bit = 1;
+//		dbltogw (2.0, x);	// Initial values
+//		dbltogw ((double)P, y);
 		itogwyp (2, x);		// Initial values
-		itogwyp (*P, y);
-		itogwyp (2, gw2);
-		itogwyp (*P, gwP);
-		itogwyp (1, gwQpow);    // 06/06/24
+		itogwyp (P, y);
 	}
 
-	itog (D, tmp);			// Compute inverse of D modulo N
+
+	itog (D, tmp);						// Compute inverse of D modulo N
+//	invg (modulus, tmp);
 	gwypinvg (modulus, tmp);
 	gianttogwyp (tmp, gwinvD);	// Convert it to gwypnum
 	gtog (modulus, tmp);		// Compute inverse of 2 modulo N
@@ -11641,15 +11418,14 @@ restart:
 	gshiftright (1, tmp);
 	gianttogwyp (tmp, gwinv2);	// Convert it to gwypnum
 
-//	if (abs(*Q) <= GWMULBYCONST_MAX)	// 23/05/24
-	    gwypsetmulbyconst (*Q);
-//	else
-//	    gwypsetmulbyconst (1); 	// mulbyconst does not work if the constant is too big...
-
 /* Output a message about the FFT length */
 
 	gwypfft_description (fft_desc);
-	sprintf (buf, "%s, P = %lu, Q = %lu\n", fft_desc, *P, *Q);
+#ifdef WIN32
+	sprintf (buf, "%s, P = %d\n", fft_desc, (int)P);
+#else
+	sprintf (buf, "%s, P = %d", fft_desc, (int)P);
+#endif
 	OutputStr (buf);
 	LineFeed ();
 	if (verbose) {
@@ -11669,7 +11445,6 @@ restart:
 	iters = 0;
 	gwypstart_timer (0);
 	gwypstart_timer (1);
-
 	while (bit <= Nlen) {
 
 /* Error check the last 50 iterations, before writing an */
@@ -11690,10 +11465,10 @@ restart:
 
 		gwypsetnormroutine (0, echk, 0);
 
-		if (*Q == 1) {
-		    if (bitval (tmp2, Nlen-bit)) {
-			gwypsetaddin (-(int)*P);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
+		if (bitval (tmp2, Nlen-bit)) {
+			gwypsetaddin (-(int)P);
+			if (/*(bit+26 < Nlen) && (bit > 26) &&*/
+				((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
                             if (cufftonly)
                                 gwypmul (y, x);
                             else
@@ -11705,9 +11480,9 @@ restart:
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 1)
-// 			We did x*y-P -> x that is v(n)*v(n+1)-P ->  V(n) that is : V(n) becomes V(2*n+1)
 			gwypsetaddin (-2);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
+			if (/*(bit+26 < Nlen) && (bit > 26) && */
+				((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
                             if (cufftonly)
                                 gwypsquare (y);
                             else if (zp || generic)
@@ -11725,150 +11500,27 @@ restart:
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 2)
-//			We did y*y-2 -> y that is V(n+1)*Vn+1)-2 ->  V(n+1) that is : V(n+1) becomes V(2*n+2)
-		    }
-		    else {
-			gwypsetaddin (-(int)*P);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
-                            if (cufftonly)
-                                gwypmul (x, y);
-                            else
-                                cuda_gwypmul (x, y, 3);
-                            care = FALSE;
-			}
-			else {
-                            gwypmul_carefully (x, y);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 3)
-// 			We did x*y-P -> y that is V(n)*V(n+1)-P -> V(n+1) that is : V(n+1) becomes V(2*n+1)
-			gwypsetaddin (-2);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
-                            if (cufftonly)
-                                gwypsquare (x);
-                            else if (zp || generic)
-                                cuda_gwypsquare (x, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (x,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (x,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (x,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (x);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 4)
-//			We did x*x-2 -> x that is V(n)*V(n)-2 -> V(n) that is : V(n) becomes V(2*n)
-		    }
 		}
 		else {
-		    gwypsetaddin (0);		// Reset addin constant.
-		    if (bitval (tmp2, Nlen-bit)) {
-			gwypcopy (gwP, p);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[1] && !maxerr_recovery_mode[2]))) {
-                            if (cufftonly) {
-                                gwypmul (y, x);
-                                gwypmul (gwQpow, p);
-			    }
-                            else {
-                                cuda_gwypmul (y, x, 3);
-				cuda_gwypmul (gwQpow, p, 3);
- 			    }
-                            care = FALSE;
-			}
-			else {
-                            gwypmul_carefully (y, x);
-                            gwypmul_carefully (gwQpow, p);
-                            care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 1)
-			gwypsub (p, x);
-// 			We did x*y-P*Q^n -> x that is v(n)*v(n+1)-P*Q^n ->  V(n) that is : V(n) becomes V(2*n+1)
-			gwypcopy (gw2, pp);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) { 
-                            if (cufftonly) {
-                                gwypsquare (y);
-				gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-				gwypmul (gwQpow, pp);
-				gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    }
-                            else {
-				if (zp || generic)
-				    cuda_gwypsquare (y, 3);
-				else if(bit==1 || it==0)  
-				    {cuda_gwypsquare (y,1);it=1;}
-				else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-				    cuda_gwypsquare (y,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-				else 
-				    cuda_gwypsquare (y,2);
-				gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-				cuda_gwypmul (gwQpow, pp, 3);
-				gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    }
-			    care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (y);
-			    gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-			    gwypmul_carefully (gwQpow, pp);
-			    gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-			    care = TRUE;
-			}
-			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 2)
-			gwypsub (pp, y);
-//			We did y*y-2*Q^(n+1) -> y that is V(n+1)*Vn+1)-2*Q^(n+1) ->  
-//V(n+1) that is : V(n+1) becomes V(2*n+2)
-			gwypsetnormroutine (0, 1, 1);	// set mul. by const.
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
-                            if (cufftonly) {
-                                gwypsquare (gwQpow);
-			    }
-                            else if (zp || generic)
-                                cuda_gwypsquare (gwQpow, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (gwQpow,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (gwQpow,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (gwQpow,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (gwQpow);
-			    care = TRUE;
-			}
-			gwypsetnormroutine (0, 1, 0);	// reset mul. by const.
-		    }
-		    else {
-			gwypcopy (gwP, p);
-			if (((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
-                            if (cufftonly) {
+			gwypsetaddin (-(int)P);
+			if (/*(bit+26 < Nlen) && (bit > 26) && */
+				((bit != lasterr_point) || (!maxerr_recovery_mode[3] && !maxerr_recovery_mode[4]))) {
+                            if (cufftonly)
                                 gwypmul (x, y);
-                                gwypmul (gwQpow, p);
-			    }
-                            else {
+                            else
                                 cuda_gwypmul (x, y, 3);
-				cuda_gwypmul (gwQpow, p, 3);
-			    }
                             care = FALSE;
 			}
 			else {
                             gwypmul_carefully (x, y);
-			    gwypmul_carefully (gwQpow, p);
-			    care = TRUE;
+                            care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(y, (bit), Nlen, 3)
-			gwypsub (p, y);
-// 			We did x*y-P*Q^n -> y that is V(n)*V(n+1)-P*Q^n -> V(n+1) that is : y = V(n+1) becomes y = V(2*n+1)
-			gwypcopy (gw2, pp);
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
-                            if (cufftonly) {
+			gwypsetaddin (-2);
+			if (/*(bit+26 < Nlen) && (bit > 26) &&*/
+				((bit != lasterr_point) || !maxerr_recovery_mode[4])) {
+                            if (cufftonly)
                                 gwypsquare (x);
-				gwypmul (gwQpow, pp);
-			    }
                             else if (zp || generic)
                                 cuda_gwypsquare (x, 3);
                             else if(bit==1 || it==0)  
@@ -11877,42 +11529,20 @@ restart:
                                 cuda_gwypsquare (x,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
                             else
                                 cuda_gwypsquare (x,2);
-			    cuda_gwypmul (gwQpow, pp, 3);
                             care = FALSE;
 			}
 			else {
                             gwypsquare_carefully (x);
-                            gwypmul_carefully (gwQpow, pp);
                             care = TRUE;
 			}
 			CHECK_IF_ANY_ERROR(x, (bit), Nlen, 4)
-			gwypsub (pp, x);
-//			We did x*x-2*Q^n -> x that is V(n)*V(n)-2*Q^n -> V(n) that is : x = V(n) becomes x = V(2*n)
-			if (((bit != lasterr_point) || !maxerr_recovery_mode[2])) {
-                            if (cufftonly) {
-                                gwypsquare (gwQpow);
-			    }
-                            else if (zp || generic)
-                                cuda_gwypsquare (gwQpow, 3);
-                            else if(bit==1 || it==0)  
-                                {cuda_gwypsquare (gwQpow,1);it=1;}
-                            else  if(bit != (lasterr_point-1)&&(bit+26 < Nlen) && (bit > 26)) 
-                                cuda_gwypsquare (gwQpow,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
-                            else
-                                cuda_gwypsquare (gwQpow,2);
-                            care = FALSE;
-			}
-			else {
-                            gwypsquare_carefully (gwQpow);
-			    care = TRUE;
-			}
-		    }
 		}
 
  /* That iteration succeeded, bump counters */
 
-		if (bit == lasterr_point)
-                    saving = 1;	// Be sure to restart after this recovery iteration!
+		if (will_try_larger_fft && (bit == lasterr_point))
+                    saving = 1;
+// Be sure to restart after this recovery iteration!
 		bit++;
 		iters++;
 
@@ -11963,7 +11593,7 @@ restart:
 
 		if (saving || stopping) {
 			write_time = DISK_WRITE_TIME * 60;
-			if (! writeToFileBCQ (filename, bit, *P, *Q, nrestarts, bpf, x, y, gwQpow)) {
+			if (! writeToFileB (filename, bit, P, nrestarts, bpf, x, y)) {
 				sprintf (buf, WRITEFILEERR, filename);
 				OutputBoth (buf);
 				if (write_time > 600) write_time = 600;
@@ -12026,15 +11656,14 @@ restart:
 			char	interimfile[20];
 			sprintf (interimfile, "%.8s.%03lu",
 				 filename, bit / interimFiles);
-//			if (! writeToFileB (interimfile, bit, *P, nrestarts, bpf, x, y)) {
-			if (! writeToFileBCQ (interimfile, bit, *P, *Q, nrestarts, bpf, x, y, gwQpow)) {
+			if (! writeToFileB (interimfile, bit, P, nrestarts, bpf, x, y)) {
 				sprintf (buf, WRITEFILEERR, interimfile);
 				OutputBoth (buf);
 			}
 		}
 	}
 
-			care = TRUE;	// All following errors are considered unrecoverable...
+	care = TRUE;	// All following errors are considered unrecoverable...
 
 	// Compute the matrix at (N+1)/base
 
@@ -12046,61 +11675,73 @@ restart:
 	gwypcopy (x, y);		// Now, y = V((N+1)/base)
 	gwypsetnormroutine (0, 1, 1);	// set mul. by const.
 	gwypsetmulbyconst (2);
-	
+//	gwypmul (gwinvD, a21);		
+// a21 = D^-1*2*V((N+1)/base+1) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, a21);	// a21 = D^-1*2*V((N+1)/base+1) modulo N
+            gwypmul (gwinvD, a21);
         else
             cuda_gwypmul (gwinvD, a21, 3);
 	CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (*P);
-
+	gwypsetmulbyconst (P);
+//	gwypmul (gwinvD, x);
+// x =  D^-1*P*V((N+1)/base) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, x);	// x =  D^-1*P*V((N+1)/base) modulo N
+            gwypmul (gwinvD, x);
         else
             cuda_gwypmul (gwinvD, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
-	gwypsub (x, a21);		// a21 = D^-1*(2*V((N+1)/base+1)-P*V((N+1)/base)) = U(N+1)/base modulo N
-
+	gwypsub (x, a21);
+// a21 = D^-1*(2*V((N+1)/base+1)-P*V((N+1)/base)) = U(N+1)/base modulo N
+//	gwypmul (gwinvD, a11); a11 = D^-1*P*V((N+1)/base+1) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, a11);	// a11 = D^-1*P*V((N+1)/base+1) modulo N
+            gwypmul (gwinvD, a11);
         else
             cuda_gwypmul (gwinvD, a11, 3);
 	CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (2**Q);	// 28/05/24
+	gwypsetmulbyconst (2);
+//	gwypmul (gwinvD, y);// xx = D^-1*2*V((N+1)/base) modulo N
         if (cufftonly)
-            gwypmul (gwinvD, y);	// xx = D^-1*2*V((N+1)/base) modulo N
+            gwypmul (gwinvD, y);
         else
             cuda_gwypmul (gwinvD, y, 3);
 	CHECK_IF_ANY_ERROR(y, (Nlen), Nlen, 6)
-	gwypsub (y, a11);		// a11 = D^-1*(P*V((N+1)/base+1)-2*V((N+1)/base)) = U((N+1)/base+1) modulo N
+	gwypsub (y, a11);
+// a11 = D^-1*(P*V((N+1)/base+1)-2*V((N+1)/base)) = U((N+1)/base+1) modulo N
 	gwypsetnormroutine (0, 1, 0);	// reset mul by const
+//	gwypmul (gwinv2, a22); a22 = 2^-1*V((N+1)/base)
         if (cufftonly)
-            gwypmul (gwinv2, a22);	// a22 = 2^-1*V((N+1)/base)
+            gwypmul (gwinv2, a22);
         else
             cuda_gwypmul (gwinv2, a22, 3);
 	CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//	gwypmul (gwinv2, a12); a12 = 2^-1*V((N+1)/base+1)
         if (cufftonly)
-            gwypmul (gwinv2, a12);	// a12 = 2^-1*V((N+1)/base+1)
+            gwypmul (gwinv2, a12);
         else
             cuda_gwypmul (gwinv2, a12, 3);
 	CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
-	gwypsetmulbyconst (*P);
+	gwypsetmulbyconst (P);
 	gwypsetnormroutine (0, 1, 1);	// set mul. by const.
 	gwypcopy (a11, x);		// x = U((N+1)/base+1)
+//	gwypmul (gwinv2, x);		// x = 2^-1*P*U((N+1)/base+1)
         if (cufftonly)
-            gwypmul (gwinv2, x);	// x = 2^-1*P*U((N+1)/base+1)
+            gwypmul (gwinv2, x);
         else
             cuda_gwypmul (gwinv2, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
-	gwypsub (x, a12);		// a12 = 2^-1(V((N+1)/base+1)-P*U((N+1)/base+1))
+	gwypsub (x, a12);
+// a12 = 2^-1(V((N+1)/base+1)-P*U((N+1)/base+1))
 	gwypcopy (a21, x);		// x = U((N+1)/base)
+//	gwypmul (gwinv2, x);		// x = 2^-1*P*U((N+1)/base)
         if (cufftonly)
-            gwypmul (gwinv2, x);	// x = 2^-1*P*U((N+1)/base)
+            gwypmul (gwinv2, x);
         else
             cuda_gwypmul (gwinv2, x, 3);
 	CHECK_IF_ANY_ERROR(x, (Nlen), Nlen, 6)
-	gwypsub (x, a22);  		// a22 = 2^-1(V((N+1)/base)-P*U((N+1)/base))
+	gwypsub (x, a22);  // a22 = 2^-1(V((N+1)/base)-P*U((N+1)/base))
 	gwypsetnormroutine (0, 1, 0);	// reset mul by const
+
+//	gwyptogiant (a21, tmp);		// tmp = U((N+1)/base) modulo N
 
 	gwypcopy (a11, c11);	// Save the current matrix
 	gwypcopy (a12, c12);
@@ -12121,85 +11762,98 @@ restart:
 		gwypcopy (a12, p);		// a12-->p
 		gwypcopy (a12, pp);		// a12-->pp
 		gwypadd3 (a11, a22, s);		// a11+a12-->s
+//		gwypmul (a21, p);		// a21*a12-->p
                 if (cufftonly)
-                    gwypmul (a21, p);		// a21*a12-->p
+                    gwypmul (a21, p);
                 else
                     cuda_gwypmul (a21, p, 3);
 		CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//		gwypsquare (a22);	        // a22*a22-->a22
                 if (cufftonly)
-                    gwypsquare (a22);	        // a22*a22-->a22
+                    gwypsquare (a22);
                 else
                     cuda_gwypsquare (a22, 3);
 		CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//		gwypmul (s, a21);	        // (a11+a22)*a21-->a21 T
                 if (cufftonly)
-                    gwypmul (s, a21);	        // (a11+a22)*a21-->a21 T
+                    gwypmul (s, a21);
                 else
                     cuda_gwypmul (s, a21, 3);
 		CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-		gwypadd (p, a22);     		// a21*a12+a22*a22-->a22 T
+		gwypadd (p, a22);     // a21*a12+a22*a22-->a22 T
+//		gwypmul (s, a12);     // (a11+a22)*a12-->a12 T
                 if (cufftonly)
-                    gwypmul (s, a12);     	// (a11+a22)*a12-->a12 T
+                    gwypmul (s, a12);
                 else
                     cuda_gwypmul (s, a12, 3);
 		CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//		gwypsquare (a11);     // a11*a11-->a11
                 if (cufftonly)
-                    gwypsquare (a11);     	// a11*a11-->a11
+                    gwypsquare (a11);
                 else
                     cuda_gwypsquare (a11, 3);
 		CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
-		gwypadd (p, a11);     		// a21*a12+a11*a11-->a11 T
+		gwypadd (p, a11);     // a21*a12+a11*a11-->a11 T
 
 // Multiply it if required
 
 		if (bitval (gb, explen-bit-1)) {
 			gwypcopy (a11, p);		// a11-->p
 			gwypcopy (a21, pp);		// a21-->pp
+//			gwypmul (b11, a11);	        // b11*a11-->a11
                         if (cufftonly)
-                            gwypmul (b11, a11);	        // b11*a11-->a11
+                            gwypmul (b11, a11);
                         else
                             cuda_gwypmul (b11, a11, 3);
 			CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
+//			gwypmul (b12, pp);		// b12*a21-->pp
                         if (cufftonly)
-                            gwypmul (b12, pp);		// b12*a21-->pp
+                            gwypmul (b12, pp);
                         else
                             cuda_gwypmul (b12, pp, 3);
 			CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
-			gwypadd (pp, a11);   		// b11*a11+b12*a21-->a11 T
+			gwypadd (pp, a11);   // b11*a11+b12*a21-->a11 T
+//			gwypmul (b21, p);    // b21*a11-->p
                         if (cufftonly)
-                            gwypmul (b21, p);   	// b21*a11-->p
+                            gwypmul (b21, p);
                         else
                             cuda_gwypmul (b21, p, 3);
 			CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//			gwypmul (b22, a21);  // b22*a21-->a21
                         if (cufftonly)
-                            gwypmul (b22, a21);  	// b22*a21-->a21
+                            gwypmul (b22, a21);
                         else
                             cuda_gwypmul (b22, a21, 3);
 			CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
 			gwypadd (p, a21);		// b21*a11+b22*a21-->a21 T
 			gwypcopy (a12, p);		// a12-->p
 			gwypcopy (a22, pp);		// a22-->pp
+//			gwypmul (b11, a12);	        // b11*a12-->a12
                         if (cufftonly)
-                            gwypmul (b11, a12);	        // b11*a12-->a12
+                            gwypmul (b11, a12);
                         else
                             cuda_gwypmul (b11, a12, 3);
 			CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//			gwypmul (b12, pp);		// b12*a22-->pp
                         if (cufftonly)
-                            gwypmul (b12, pp);		// b12*a22-->pp
+                            gwypmul (b12, pp);
                         else
                             cuda_gwypmul (b12, pp, 3);
 			CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
 			gwypadd (pp, a12);		// b11*a12+b12*a22-->a12 T
+//			gwypmul (b21, p);		// b21*a12-->p
                         if (cufftonly)
-                            gwypmul (b21, p);		// b21*a12-->p
+                            gwypmul (b21, p);
                         else
                             cuda_gwypmul (b21, p, 3);
 			CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//			gwypmul (b22, a22);	        // b22*a22-->a22
                         if (cufftonly)
-                            gwypmul (b22, a22);	        // b22*a22-->a22
+                            gwypmul (b22, a22);
                         else
                             cuda_gwypmul (b22, a22, 3);
 			CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
-			gwypadd (p, a22);    		// b21*a12+b22*a22-->a22 T
+			gwypadd (p, a22);    // b21*a12+b22*a22-->a22 T
 
 		}
 		bit++;
@@ -12211,6 +11865,7 @@ restart:
 	ReplaceableLine (2);	/* Replace line */
 
 	if (!isZero (tmp)) {
+//	if (!gwiszero(a21)) {
 		*res = FALSE;	/* Not a prime */
 		if (abs(tmp->sign) < 2)	// make a 64 bit residue correct !!
 			sprintf (res64, "%04X%04X%04X%04X", 0, 0, 0, tmp->n[0]);
@@ -12221,24 +11876,9 @@ restart:
 		else
 			sprintf (res64, "%04X%04X%04X%04X", tmp->n[3], tmp->n[2], tmp->n[1], tmp->n[0]);
 		if (IniGetInt(INI_FILE, (char*)"Verify", 0))
-			sprintf (buf, "%s is not prime. P = %lu, Q = %lu, Lucas RES64: %s", str, *P, *Q, res64);
+			sprintf (buf, "%s is not prime. P = %lu, Lucas RES64: %s", str, P, res64);
 		else
-			sprintf (buf, "%s is not prime, although Fermat PSP! P = %lu, Q = %lu, Lucas RES64: %s", str, *P, *Q, res64);
-		if (possiblyfalsenegative < 3) {
-		    possiblyfalsenegative++;
-		    sprintf (buf, "%s may be a false negative. P = %lu, Q = %lu, Lucas RES64: %s, restarting with next FFT length.\n", str, *P, *Q, res64);
-		    OutputBoth (buf);
-		    will_try_larger_fft = 1;	// Default after a  Roundoff error in Lucasequence... 26/06/24
-		    frestart = 1;
-		    if (will_try_larger_fft) {
-			IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc = (IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1));
-			if (nbfftinc == maxfftinc)
-			    abonroundoff = TRUE;	// Don't accept any more Roundoff error.
-			_unlink (filename);             // restart from the beginning... 22/05/21
-		    }
-		}
-		else
-		    possiblyfalsenegative = 0;
+			sprintf (buf, "%s is not prime, although Fermat PSP! P = %lu, Lucas RES64: %s", str, P, res64);
 	}
 	else {
 		sprintf (buf, "%s may be prime, trying to compute gcd's\n", str);
@@ -12247,7 +11887,7 @@ restart:
 		else
 			OutputStr (buf);
 		for (j=jmax; j>=jmin; j--) {
-			if (bpf[j] == 0)
+			if (bpf[j] == 1)
                             // base prime factor already tested
 				continue;
 			gwypcopy (c11, a11);			// Computing U((N+1)/q)
@@ -12255,9 +11895,7 @@ restart:
 			gwypcopy (c21, a21);
 			gwypcopy (c22, a22);
 			explen = bitlen (gbpc[j]);
- 			if ((gformat == ABCECK) && (bpf[j] == 2))	// JP 04/04/24
-			    explen++;
-			bit = 1;
+                        bit = 1;
 			while (bit < explen) {
 
 // Square the matrix
@@ -12265,99 +11903,112 @@ restart:
 				gwypcopy (a12, p);	// a12-->p
 				gwypcopy (a12, pp);	// a12-->pp
 				gwypadd3 (a11, a22, s);	// a11+a12-->s
+//				gwypmul (a21, p);	// a21*a12-->p
                                 if (cufftonly)
-                                    gwypmul (a21, p);	// a21*a12-->p
+                                    gwypmul (a21, p);
                                 else
                                     cuda_gwypmul (a21, p, 3);
 				CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//				gwypsquare (a22);	// a22*a22-->a22
                                 if (cufftonly)
-                                    gwypsquare (a22);	// a22*a22-->a22
+                                    gwypsquare (a22);
                                 else
                                     cuda_gwypsquare (a22, 3);
 				CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
+//				gwypmul (s, a21); (a11+a22)*a21-->a21 T
                                 if (cufftonly)
-                                    gwypmul (s, a21); 	// (a11+a22)*a21-->a21 T
+                                    gwypmul (s, a21);
                                 else
                                     cuda_gwypmul (s, a21, 3);
 				CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-				gwypadd (p, a22);	// a21*a12+a22*a22-->a22 T
+				gwypadd (p, a22);
+                                // a21*a12+a22*a22-->a22 T
+//				gwypmul (s, a12); (a11+a22)*a12-->a12 T
                                 if (cufftonly)
-                                    gwypmul (s, a12);	// (a11+a22)*a12-->a12 T
+                                    gwypmul (s, a12);
                                 else
                                     cuda_gwypmul (s, a12, 3);
 				CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//				gwypsquare (a11); a11*a11-->a11
                                 if (cufftonly)
-                                    gwypsquare (a11);	// a11*a11-->a11
+                                    gwypsquare (a11);
                                 else
                                     cuda_gwypsquare (a11, 3);
 				CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
-				gwypadd (p, a11);	// a21*a12+a11*a11-->a11 T
+				gwypadd (p, a11);
+                                // a21*a12+a11*a11-->a11 T
 
 // Multiply it if required
 
 				if (bitval (gbpc[j], explen-bit-1)) {
-					gwypcopy (a11, p);	// a11-->p
-					gwypcopy (a21, pp);	// a21-->pp
+					gwypcopy (a11, p);// a11-->p
+					gwypcopy (a21, pp);// a21-->pp
+//				gwypmul (b11, a11); b11*a11-->a11
                                         if (cufftonly)
-                                            gwypmul (b11, a11);	// b11*a11-->a11
+                                            gwypmul (b11, a11);
                                         else
                                             cuda_gwypmul (b11, a11, 3);
 					CHECK_IF_ANY_ERROR(a11, (Nlen), Nlen, 6)
+//					gwypmul (b12, pp); b12*a21-->pp
                                         if (cufftonly)
-                                            gwypmul (b12, pp);	// b12*a21-->pp
+                                            gwypmul (b12, pp);
                                         else
                                             cuda_gwypmul (b12, pp, 3);
 					CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
-					gwypadd (pp, a11);	// b11*a11+b12*a21-->a11 T
+					gwypadd (pp, a11);
+                                        // b11*a11+b12*a21-->a11 T
+//					gwypmul (b21, p); b21*a11-->p
                                         if (cufftonly)
-                                            gwypmul (b21, p);	// b21*a11-->p
+                                            gwypmul (b21, p);
                                         else
                                             cuda_gwypmul (b21, p, 3);
 					CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//				gwypmul (b22, a21); b22*a21-->a21
                                         if (cufftonly)
-                                            gwypmul (b22, a21);	// b22*a21-->a21
+                                            gwypmul (b22, a21);
                                         else
                                             cuda_gwypmul (b22, a21, 3);
 					CHECK_IF_ANY_ERROR(a21, (Nlen), Nlen, 6)
-					gwypadd (p, a21);	// b21*a11+b22*a21-->a21 T
-					gwypcopy (a12, p);	// a12-->p
-					gwypcopy (a22, pp);	// a22-->pp
+					gwypadd (p, a21);
+                                        // b21*a11+b22*a21-->a21 T
+					gwypcopy (a12, p);// a12-->p
+					gwypcopy (a22, pp);// a22-->pp
+//				gwypmul (b11, a12); b11*a12-->a12
                                         if (cufftonly)
-                                            gwypmul (b11, a12);	// b11*a12-->a12
+                                            gwypmul (b11, a12);
                                         else
                                             cuda_gwypmul (b11, a12, 3);
 					CHECK_IF_ANY_ERROR(a12, (Nlen), Nlen, 6)
+//					gwypmul (b12, pp); b12*a22-->pp
                                         if (cufftonly)
-                                            gwypmul (b12, pp);	// b12*a22-->pp
+                                            gwypmul (b12, pp);
                                         else
                                             cuda_gwypmul (b12, pp, 3);
 					CHECK_IF_ANY_ERROR(pp, (Nlen), Nlen, 6)
-					gwypadd (pp, a12);	// b11*a12+b12*a22-->a12 T
+					gwypadd (pp, a12);
+                                        // b11*a12+b12*a22-->a12 T
+//					gwypmul (b21, p); b21*a12-->p
                                         if (cufftonly)
-                                            gwypmul (b21, p);	// b21*a12-->p
+                                            gwypmul (b21, p);
                                         else
                                             cuda_gwypmul (b21, p, 3);
 					CHECK_IF_ANY_ERROR(p, (Nlen), Nlen, 6)
+//				gwypmul (b22, a22); b22*a22-->a22
                                         if (cufftonly)
-                                            gwypmul (b22, a22);	// b22*a22-->a22
+                                            gwypmul (b22, a22);
                                         else
                                             cuda_gwypmul (b22, a22, 3);
 					CHECK_IF_ANY_ERROR(a22, (Nlen), Nlen, 6)
-					gwypadd (p, a22);	// b21*a12+b22*a22-->a22 T
+					gwypadd (p, a22);
+                                        // b21*a12+b22*a22-->a22 T
 
 				}
 				bit++;
 			}
-
 			gwyptogiant (a21, tmp);
-
 			if (isZero (tmp)) {
-				if (bpf[j] == 1) {
-					gtoc(gbpf[j], bpfstring, strlen(sgb));
-					sprintf (buf, "%s may be prime, but N divides U((N+1)/%s), P = %lu, Q = %lu,\n", str, bpfstring, *P, *Q);
-				}
-				else
-					sprintf (buf, "%s may be prime, but N divides U((N+1)/%lu), P = %lu, Q = %lu,\n", str, bpf[j], *P, *Q);
+                            gtoc(gbpf[j], bpfstring, strlen(sgb));
+				sprintf (buf, "%s may be prime, but N divides U((N+1)/%s), P = %lu\n", str, bpfstring, P);
 				if (verbose)
 					OutputBoth (buf);
 				else
@@ -12365,39 +12016,33 @@ restart:
 				frestart = TRUE;
 				_unlink (filename);
 				continue;
+//				break;
 			}
 			else {
+//				gcdg (modulus, tmp);
 				gwypgcdg (modulus, tmp);
 				if (isone (tmp)) {
-					if (bpf[j] == 1) {
-						gtoc(gbpf[j], bpfstring, strlen(sgb));
-						sprintf (buf, "U((N+1)/%s) is coprime to N!\n", bpfstring);
-					}
-					else
-						sprintf (buf, "U((N+1)/%lu) is coprime to N!\n", bpf[j]);
-					OutputStr (buf);
-					if (verbose)
-						writeResults (buf);	
-					bpf[j] = 0;
+                                    gtoc(gbpf[j], bpfstring, strlen(sgb));
+                                    sprintf (buf, "U((N+1)/%s) is coprime to N!\n", bpfstring);
+                                    OutputStr (buf);
+                                    if (verbose)
+                                        writeResults (buf);	
+                                    bpf[j] = 1;
 				}
 				else {
                                     *res = FALSE; /* Not a prime */
                                     if (IniGetInt(INI_FILE, (char*)"Verify", 0))
-//                                        sprintf (buf, "%s is not prime, although Lucas PSP!! (P = %lu)", str, *P);
-					sprintf (buf, "%s is not prime, although Lucas PSP!! (P = %lu, Q = %lu)", str, *P, *Q);
+                                        sprintf (buf, "%s is not prime, although Lucas PSP!! (P = %lu)", str, P);
                                     else
-//                                        sprintf (buf, "%s is not prime, although Fermat and Lucas PSP!! (P = %lu)", str, *P);
-					sprintf (buf, "%s is not prime, although Fermat and Lucas PSP!! (P = %lu, Q = %lu)", str, *P, *Q);
+                                        sprintf (buf, "%s is not prime, although Fermat and Lucas PSP!! (P = %lu)", str, P);
 					break;
 				}
 			}
 		}
 	}
 
-	if (*res && !frestart) {
-	    sprintf (buf, "%s is prime! (%d decimal digits, P = %lu, Q = %lu)", str, nbdg, *P, *Q);
-	    possiblyfalsenegative = 0;
-	}
+	if (*res && !frestart)
+		sprintf (buf, "%s is prime! (%d decimal digits, P = %lu)", str, nbdg, P);
 
 	care = FALSE;// Reset the "unrecoverable" condition.
 	gwypfree (tmp);
@@ -12425,6 +12070,7 @@ restart:
 /* Cleanup and return */
 
 	Nlen = bitlen (N);
+//	gwypdone ();
 	_unlink (filename);
 	lasterr_point = 0;
 
@@ -12487,8 +12133,6 @@ error:
 
 /* Restart */
 
-	will_try_larger_fft = 1;		// Default after a  Roundoff error in Lucasequence... 26/06/24
-
 	if (will_try_larger_fft) {
             IniWriteInt(INI_FILE, (char*)"FFT_Increment", nbfftinc =  IniGetInt(INI_FILE, (char*)"FFT_Increment", 0) + 1);
             if (nbfftinc == maxfftinc)
@@ -12510,26 +12154,31 @@ int gplusminustest (
 	int	*res) 
 { 
 	char	filename[20], buf[sgkbufsize+256], str[sgkbufsize+256], sgk1[sgkbufsize], fft_desc[256], oldres64[17]; 
-	unsigned long base, bits, explen, iters, bit, a, /*D,*/ frestart=FALSE;
-	unsigned long newa, maxrestarts, P = 3, Q = 1/*, maxrestartsP = 10*/;
+	unsigned long bits, explen, iters, bit, frestart=FALSE;
+	unsigned long newa, maxrestarts;
+//	uint32_t hi = 0, lo = 0;
 	double dk;
-	giant /*grem,*/ tmp, tmp2, tmp3;
+	giant grem, tmp, tmp2, tmp3;
 	gwypnum x, y;
-	long	write_time = DISK_WRITE_TIME * 60;
+	long	a, P, write_time = DISK_WRITE_TIME * 60;
 	int	echk, saving, stopping, jmin, jmax, j, retval, Psample;
         int     factorized, factorized_part = 0;
 	time_t	start_time, current_time;
 	double	reallyminerr = 1.0;
 	double	reallymaxerr = 0.0;
 
-	if (gb->sign <= 2) {
-	    base = gb->n[0];
-	    if (gb->sign == 2)
-		base += 65536*gb->n[1];
-	}
+/*	gk = newgiant (strlen(sgk)/2 + 8);
+// Allocate one byte per decimal digit + spares
+	ctog (sgk, gk);		// Convert k string to giant
+	gshiftleft (shift, gk);	// Shift k multiplier if requested
+	gtoc (gk, sgk1, sgkbufsize);   // Updated k string
+	if (!strcmp(sgk1, "1"))
+		sprintf (str, "%lu^%lu%c%d", base, n, (incr < 0) ? '-' : '+', abs(incr));
 	else
-	    base = 1;
-    
+		sprintf (str, "%s*%lu^%lu%c%d", sgk1, base, n, (incr < 0) ? '-' : '+', abs(incr));
+
+	klen = bitlen(gk);
+*/
 	if ((gformat == ABCDN) || (gformat == ABCDNG)) {
             // Compute gk = gb^(n-m)-1
             bits = ndiff*bitlen (gb);
@@ -12539,24 +12188,11 @@ int gplusminustest (
             iaddg (-1, gk);
             sprintf (str, "%s^%lu-%s^%lu%c%d", sgb, n+ndiff, sgb, n, incr < 0 ? '-' : '+', abs(incr));
 	}
-	else if (gformat == ABCECK) {	
-		// Compute gk = (gb^n)/2+incr,  which is odd and < sqrt(N) as unfactorized part of N+1
-	    bits = n*bitlen (gb);
-	    gk = newgiant ((bits >> 2) + 8);
-	    gtog (gb, gk);
-	    power (gk, n);
-	    gshiftright (1, gk);
-	    iaddg (incr, gk);
-	    if ((incr > 0))
-		sprintf (str, "(%s^%lu+1)^2-2", sgb, n);
-	    else
-		sprintf (str, "(%s^%lu-1)^2-2", sgb, n);
-	}
 	else {
-            gk = newgiant (strlen(sgk) + 8);			// 03/09/24
+            gk = newgiant (strlen(sgk)/2 + 8);
             // Allocate one byte per decimal digit + spares
             ctog (sgk, gk);	// Convert k string to giant
-//            grem = newgiant (2*abs(gk->sign) + 8);
+            grem = newgiant (2*abs(gk->sign) + 8);
             // place for mod (gk, gb)
             gshiftleft (shift, gk); // Shift k multiplier if requested
             gtoc (gk, sgk1, sgkbufsize);	// Updated k string
@@ -12569,44 +12205,51 @@ int gplusminustest (
 	bits = n * bitlen(gb) + bitlen(gk); 
 	N =  newgiant ((bits >> 2) + 16);   // Allocate memory for N
 	M = newgiant ((bits >> 2) + 16);   // Allocate memory for M
-	
-	klen = bitlen(gk);
 
 //	Be sure the base does not divide the gk multiplier :
 
-	if (!isone(gk) && (base !=1) && (gformat != ABCDN) && (gformat != ABCDNG) && (gformat != ABCECK)) {
-	    while (!(gmodi (base, gk))) {
+/*	while (!(gmodi (base, gk))) {
 		gwypuldivg (base, gk);
 		n++;
-	    }
 	}
-
+*/
+	if ((gformat != ABCDN) && (gformat != ABCDNG)) {
+		while (!isone(gk)) {
+			gtog (gk,grem);
+			modg (gb, grem);
+			if (!isZero(grem))
+				break;
+			gwypdivg (gb, gk);
+			n++;
+		}
+		free (grem);
+	}
 
 	if ((int)klen != bitlen(gk))	// Has k been updated ?
 		gtoc (gk, sgk1, sgkbufsize);
 	else
 		strcpy (sgk1, sgk);
 
-//	Compute the number we are testing.
-;
-	gtog (gb, N);
-	power (N, n);
-	if (gformat == ABCECK)	// 2*gb^n is the factorized part of N+1 for the Morrison test.
-	    gshiftleft (1, N);
+/*	bits = (unsigned long) ((n * log(base)) / log(2) + bitlen(gk)); 
+	N =  newgiant ((bits >> 2) + 16);  // Allocate memory for N
+*/
 
-	Nlen = bitlen (N); 	// Bit length of base^n
+//	Compute the number we are testing.
+        
+	gtog (gb, M);
+	power (M, n-1);
+        gtog (M, N);
+        mulg (gb, N);
+
+	Nlen = bitlen (N); // Bit length of base^n
 
 	mulg (gk, N); 
-	gtog (N, M);		// 14/08/24
+        mulg (gk, M);      // M = (N-incr)/base         
 
-	iaddg ((gformat==ABCECK)?-1:incr, N);	// N.B. : N is the modulus, M is the exponent for the Morrison test
-	
+	iaddg (incr, N);
+
 	klen = bitlen(gk);
 
-        if (format == ABCDN && n == ndiff) { 			// Batalov 31/05/23
-                klen = 1; generic = FALSE; dk = 1.0;
-                globalb = base;
-        } else
 	if (klen > 53) {	// we must use generic reduction
 		dk = 0.0;
 	}
@@ -12620,9 +12263,12 @@ int gplusminustest (
 			dk += 65536.0*65536.0*65536.0*(double)gk->n[3];
 	}
 
-	nbdg = gnbdg (N, 10);	// Compute the number of decimal digits of the tested number.
+
+	nbdg = gnbdg (N, 10);	
+        // Compute the number of decimal digits of the tested number.
 
 	if ((klen > Nlen) && (nbdg > 400)) {
+//	    sprintf(buf, "%s > %lu^%lu, so, only a Strong PRP test is done for %s.\n", sgk1, base, n, str);
             if ((gformat == ABCDN) || (gformat == ABCDNG))
                 sprintf(buf, "%s^%lu-1 > %s^%lu, so, only a PRP test is done for %s.\n", sgb, ndiff, sgb, n, str);
             else
@@ -12635,14 +12281,14 @@ int gplusminustest (
             return retval;
 	}
 
-	Nlen = bitlen (N); 				// Bit length of N
-
-	factorized = findgbpf (gb); 			// Factorize the base if possible...
+	Nlen = bitlen (N); // Bit length of N
+//	findbpf (base);	   // Factorize the base
+	factorized = findgbpf (gb); // Factorize the base if possible...
 
 	for (jmax=29; (jmax>=0) && !bpf[jmax]; jmax--);
-	jmin = 0;					// Choose the minimum required factored part.
-	factorized_part = 0;
-	if (jmax) {					// The base is composite...
+	jmin = 0;							// Choose the minimum required factored part.
+	if (jmax) {							// The base is composite...
+            factorized_part = bitlen (gk);
             for (j=jmax; j>0; j--) {
                 if (bpf[j] == 1)
                     factorized_part += n*vpf[j]*bitlen(gbpf[j]);
@@ -12653,6 +12299,7 @@ int gplusminustest (
             }
             jmin = j;
             sprintf (buf, "Base factorized as : ");
+
             for (j=0; j<=jmax; j++) {
                 if (j<jmax) {
                     if (bpf[j] == 1)
@@ -12729,76 +12376,59 @@ int gplusminustest (
 		else
 			P = Psample;
 	}
+											// The Discriminant for the Morrison test
+//	D = P*P-4;								// D = P^2 - 4*Q with Q = 1
+
+
+// restart:
+
+/* Setup the gwypnum code */
+
 
 restart:
 
 	*res = TRUE;
+//	M = newgiant ((bits >> 2) + 16);	// Allocate memory for M
 	tmp = newgiant ((bits >> 2) + 16);	// Allocate memory for tmp
 	gtog (N, tmp);
 	iaddg (-1, tmp);			// tmp = N-1
 
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-
-	if ((gformat != ABCECK) && (incr == +1)) {	// Pocklington test.
+	if (incr == +1) {
             gwypsetmaxmulbyconst (abs(a));
-	    gwypdivg (gb, tmp);          // tmp = (N-1)/base
+//            gwypdivg (gb, tmp);		// tmp = (N-1)/base
+//            gtog (gb, tmp);
+//            power (tmp, n-1);
+//            mulg (gk, tmp);             // tmp = (N-1)/base
+            gtog (M,tmp);                 // tmp = (N-1)/base
             explen = bitlen (tmp);
-	    if (format == ABCDN && n == ndiff) {	// Batalov 31/05/23
-		dk = 1.0;
-		if (!setupok (gwypsetup (dk, base, 3*ndiff, +1, N), N, str, res)) {
-		    gwypfree(gk);
-		    gwypfree(N);
-		    gwypfree (M);
-		    gwypfree (tmp);
-		    *res = FALSE;           // Not proven prime...
-		    return FALSE;
-		}
-		fprintf (stderr,"Found Phi(3,-%s^%lu)...\n",sgb, ndiff);
-	    } else
-		if (gb->sign <= 2) {
-		    if (!setupok (gwypsetup (dk, base, n, +1, N), N, str, res)) {
-			gwypfree(gk);
-			gwypfree(N);
-			gwypfree (M);
-			gwypfree (tmp);
-//			*res = FALSE;		// Not proven prime...
-			return TRUE; 
-		    }
-		}
-		else if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
-// force generic mode if large base...
-		    gwypfree(gk);
-		    gwypfree(N);
-		    gwypfree (M);
-		    gwypfree (tmp);
-//			*res = FALSE;		// Not proven prime...
-		    return TRUE; 
-		}
-	    tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp2
-	    tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
-	}
-	else {				// Morrison test
-            gwypsetmaxmulbyconst (max(abs(a), abs(P)));
-            explen = bitlen (tmp);
-		if (gb->sign <= 2) {
-		    if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
-			gwypfree(gk);
-			gwypfree(N);
-			gwypfree (M);
-			gwypfree (tmp);
-//			*res = FALSE;		// Not proven prime...
-			return TRUE; 
-		    }
-		}
-		else if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
-// force generic mode if large base...
-		    gwypfree(gk);
-		    gwypfree(N);
-		    gwypfree (M);
-		    gwypfree (tmp);
+            if (!setupok (gwypsetup (dk, 1, n, +1, N), N, str, res))
+// set base to 1 to force generic mode...
+            {
+                gwypfree(gk);
+                gwypfree(N);
+                gwypfree (M);
+                gwypfree (tmp);
 //		*res = FALSE;		// Not proven prime...
-		    return TRUE; 
-		}
+                return TRUE; 
+            }
+            tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp2
+            tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
+	}
+	else {
+            gwypsetmaxmulbyconst (max(abs(a), abs(P)));
+//            gtog (N, M);
+//            iaddg (1, M);
+            explen = bitlen (tmp);
+            if (!setupok (gwypsetup (dk, 1, n, -1, N), N, str, res)) {
+// set base to 1 to force generic mode...
+                gwypfree(gk);
+                gwypfree(N);
+                gwypfree (M);
+                gwypfree (tmp);
+//		*res = FALSE;		// Not proven prime...
+                return TRUE; 
+            }
             tmp2 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp2
             tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
             tempFileName (filename, 'L', N);
@@ -12808,7 +12438,7 @@ restart:
             else if (IniGetInt(INI_FILE, (char*)"Verify", 0) ||         IniGetInt(INI_FILE, (char*)"PRPdone", 0)) {
                 gwypclear_timers ();	// Init. timers
                 sprintf (buf, "Starting Lucas sequence for %s...\n", str);
-               goto DoLucas;	// Starting directly a Lucas sequence...
+                goto DoLucas;	// Starting directly a Lucas sequence...
             }
 	}
 
@@ -12824,6 +12454,7 @@ restart:
 /* Optionally resume from save file and output a message */
 /* indicating we are resuming a test */
 
+	//cuda if (fileExists (filename) && readFromFileB (filename, &bit, &a, &nrestarts, bpf, x, y)) {
 	if (fileExists (filename) && readFromFileB (filename,(unsigned long *) &bit,(unsigned long *) &a, &nrestarts, bpf, x, y)) {
 		char	fmt_mask[80];
 		double	pct;
@@ -12831,7 +12462,7 @@ restart:
 		sprintf (fmt_mask,
 			 "Resuming N%%c%%d prime test of %%s at bit %%ld [%%.%df%%%%]\n",
 			 PRECISION);
-		sprintf (buf, fmt_mask, ((incr < 0) || (gformat == ABCECK)) ?  '+' : '-', abs(incr), str, bit, pct);
+		sprintf (buf, fmt_mask, (incr < 0) ? '+' : '-', abs(incr), str, bit, pct);
 		OutputStr (buf);
 		if (verbose)
 			writeResults (buf);	
@@ -12841,15 +12472,15 @@ restart:
 
 	else {
 		if (frestart) {
-			sprintf (buf, "Restarting N%c%d prime test of %s\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str);
+			sprintf (buf, "Restarting N%c%d prime test of %s\n", (incr < 0) ? '+' : '-', abs(incr), str);
 			frestart = FALSE;
 		}
 		else {
 			gwypclear_timers ();		// Init. timers
                         if (showdigits)
-                            sprintf (buf, "Starting N%c%d prime test of %s (%d decimal digits)\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str, nbdg);
+                            sprintf (buf, "Starting N%c%d prime test of %s (%d decimal digits)\n", incr < 0 ? '+' : '-', abs(incr), str, nbdg);
                         else
-                            sprintf (buf, "Starting N%c%d prime test of %s\n", ((incr < 0) || (gformat == ABCECK)) ? '+' : '-', abs(incr), str);
+                            sprintf (buf, "Starting N%c%d prime test of %s\n", incr < 0 ? '+' : '-', abs(incr), str);
 		}
 		OutputStr (buf);
 		if (verbose)
@@ -12886,7 +12517,7 @@ restart:
 
 /* Init the title */
 
-	if ((incr > 0) && (gformat != ABCECK))
+	if (incr > 0)
 		title ((char*)"Pocklington prime test in progress...");
 	else
 		title ((char*)"Fermat PRP test in progress...");
@@ -13052,25 +12683,39 @@ restart:
 
 	clearline (100);
 
-	if ((incr > 0) && (gformat != ABCECK)) {
+	if (incr == +1) {
             care = TRUE;    // All following errors are considered unrecoverable...
 		bit = 1;
 		explen = bitlen (gb);
+/*		bbits = base;
+		ulone = 1;
+		while (!(bbits & mask)) {
+			bbits <<= 1;
+			ulone <<= 1;
+		}
+		bbits <<= 1;
+		ulone <<= 1;*/
 		gwypcopy (x, y);
 		gwypsetnormroutine (0, 1, 0);
+//		while (ulone) {
 		while (bit < explen) {
                     if (cufftonly)
                         gwypsquare (x);
                     else
                         cuda_gwypsquare (x, 3);
+//                    CHECK_IF_ANY_ERROR (x, (explen), explen, 6);
+//                    if (bbits & mask) {
                     CHECK_IF_ANY_ERROR (x, (bit), explen, 6);
                     if (bitval (gb, explen-bit-1)) {
                         if (cufftonly)
                             gwypmul (y, x);
                         else
                             cuda_gwypmul (y, x, 3);
+//                        CHECK_IF_ANY_ERROR (x, (explen), explen, 6);
                         CHECK_IF_ANY_ERROR (x, (bit), explen, 6);
                     } 
+//                    bbits <<= 1;
+//                    ulone <<= 1;
                     bit++;
 		}
 	}
@@ -13118,15 +12763,14 @@ restart:
                         gwypdone();
 			sprintf (buf, "%s is a Probable Prime (Base incompletely factorized).", str);
 		}
-//		if (incr == -1) {				// Morrison test ; start the Lucas sequence
-		else if ((incr == -1) || (gformat == ABCECK)) {		// Morrison test ; start the Lucas sequence
+		if (incr == -1) {				// Morrison test ; start the Lucas sequence
 			gwypfree (x);
 			gwypfree (y);
 			sprintf (buf, "%s may be prime. Starting Lucas sequence...\n", str);
 			IniWriteInt(INI_FILE, (char*)"PRPdone", 1);
 DoLucas:
 			do {
-				retval = gLucasequence (N, M, &P, &Q, gb, jmin, jmax, str, buf, res);
+				retval = gLucasequence (N, M, P, gb, jmin, jmax, str, buf, res);
 				if (retval == -2) {		// Restart required using  base
 					nrestarts++;
 					if (nrestarts > maxrestarts) {
@@ -13137,42 +12781,27 @@ DoLucas:
 						break;
 					}
 					IniWriteInt (INI_FILE, (char*)"NRestarts", nrestarts);
-					if (!possiblyfalsenegative)	// 11/07/24
-					    Q++;			// 08/06/24
-				/*D = */generalLucasBase (N, (uint32_t*)&P, (uint32_t*)&Q);
+					P = genLucasBaseP (N, P+1);
 					IniWriteInt (INI_FILE, (char*)"LucasBaseP", P);
+//					D = P*P-4;
 				}
 				if (retval < 0)	{
                                 // Restart required for any reason
-					sprintf (buf, "Restarting Lucas sequence with P = %lu, Q = %lu\n", P, Q);
+					sprintf (buf, "Restarting Lucas sequence with P = %lu\n", P);
 					gwypdone ();
                                 // Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 					gwypsetmaxmulbyconst (max(abs(a),abs(P)));
-//					if (!setupok (gwypsetup (dk,(gb->sign <= 2)?base:1, n, -1, N), N, str, res)) {
-				    if (gb->sign <= 2) {
-					if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
-					    gwypfree(gk);
-					    gwypfree(N);
-					    gwypfree (M);
-					    gwypfree (tmp);
-					    gwypfree (tmp2);
-					    gwypfree (tmp3);
+					if (!setupok (gwypsetup (dk, 1, n, -1, N), N, str, res)) {
+						gwypfree(gk);
+						gwypfree(N);
+						gwypfree (M);
+						gwypfree (tmp);
+						gwypfree (tmp2);
+						gwypfree (tmp3);
 //						*res = FALSE;		// Not proven prime...
-					    return TRUE; 
+						return TRUE; 
 					}
-				    }
-				    else if (!setupok (gwypsetup_general_mod_giant (N), N, str, res)) {
-// force generic mode if large base...
-					gwypfree(gk);
-					gwypfree(N);
-					gwypfree (M);
-					gwypfree (tmp);
-					gwypfree (tmp2);
-					gwypfree (tmp3);
-//						*res = FALSE;		// Not proven prime...
-					return TRUE; 
-				    }
 				}
 			}	while (retval < 0);
 			if (retval == FALSE) {
@@ -13186,7 +12815,6 @@ DoLucas:
 				*res = FALSE;
 				return FALSE;
 			}
-			IniWriteString (INI_FILE, (char*)"LucasBaseP", NULL);	// 11/07/24
 		}
 		else {	// Pocklington test ; compute the gcd's
                     sprintf (buf, "Computing GCD'S...");
@@ -13198,6 +12826,15 @@ DoLucas:
                             // base prime factor already tested
                             continue;
                         gwypcopy (y, x);    // Computing a^((N-1)/q)
+/*                        bbits = bpc[j];
+                        ulone = 1;
+                        while (!(bbits & mask)) {
+                            bbits <<= 1;
+                            ulone <<= 1;
+                        }
+                        bbits <<= 1;
+                        ulone <<= 1;
+                        while (ulone) {*/
                         bit = 1;
                         explen = bitlen (gbpc[j]);
                         while (bit < explen) {
@@ -13211,6 +12848,8 @@ DoLucas:
                                 cuda_gwypsquare (x,(saving || stopping || (interimResidues && (bit+1) % interimResidues < 2)) ? 2:0);
                             else
                                 cuda_gwypsquare (x,2);
+//                          CHECK_IF_ANY_ERROR (x, (explen), explen, 6);
+//                          if (bbits & mask) {
                             CHECK_IF_ANY_ERROR (x, (bit), explen, 6);
                             if (bitval (gbpc[j], explen-bit-1)) {
                                 if (cufftonly)
@@ -13219,10 +12858,11 @@ DoLucas:
                                     cuda_gwypmul (y, x, 3);
                                 CHECK_IF_ANY_ERROR (x, (explen), explen, 6);
                             }
+//                          bbits <<= 1;
+//                          ulone <<= 1;
                             bit++;
                         }
                         gwyptogiant (x, tmp);
-			if (format == ABCDN && n == ndiff) modg (N, tmp); // Batalov 31/05/23
                         if (isone (tmp)) {
                             if (frestart)
                                 continue;
@@ -13262,11 +12902,11 @@ DoLucas:
                             }
                         }
                         else {
-			    iaddg (-1, tmp);
-			    if (format == ABCDN && n == ndiff) modg (N, tmp);
-			    // this one is likely unnecessary ; Batalov 31/05/23
-			    gwypgcdg (N, tmp);
-                           if (isone (tmp)) {
+                            iaddg (-1, tmp);
+//                            gcdg (N, tmp);
+                            gwypgcdg (N, tmp);
+                            if (isone (tmp)) {
+//                                sprintf (buf, "%ld^((N-1)/%lu)-1 is coprime to N!\n", a, bpf[j]);
                                 if (bpf[j] == 1) {
                                     gtoc(gbpf[j], bpfstring, strlen(sgb));
                                     sprintf (buf, "%lu^((N-1)/%s)-1 is coprime to N!\n", a, bpfstring);
@@ -13276,7 +12916,7 @@ DoLucas:
                                 OutputStr (buf);
                                 if (verbose)
                                     writeResults (buf);
-                                bpf[j] = 0;	// 01/09/24
+                                bpf[j] = 1;
                                 // success for this prime factor of the base, continue
                             }
                             else {
@@ -13307,6 +12947,7 @@ DoLucas:
 #if defined(WIN32) && !defined(_CONSOLE)
 
 	sprintf (buf+strlen(buf), "  Time : "); 
+//	ReplaceableLine (2);	/* Replace line */ 
 
 #else
 
@@ -13354,6 +12995,7 @@ DoLucas:
 	lasterr_point = 0;
 	if (frestart)
 		goto restart;
+//	gwypdone ();
 	if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
 		IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
 	return (TRUE);
@@ -13361,6 +13003,7 @@ DoLucas:
 /* An error occured, sleep, then try restarting at last save point. */
 
 error:
+//	gwypfree (M);
 	gwypfree (tmp);
 	gwypfree (tmp2);
 	gwypfree (tmp3);
@@ -13376,6 +13019,7 @@ error:
             gwypfree (N);
             gwypfree (M);
             gwypfree (gk);
+//            gwypdone ();
             _unlink (filename);
             if (IniGetInt(INI_FILE, (char*)"PRPdone", 0))
                 IniWriteString(INI_FILE, (char*)"PRPdone", NULL);
@@ -13395,6 +13039,7 @@ error:
 /* Sleep five minutes before restarting */
 
 	if (sleep5 && ! SleepFive ()) { 
+//            gwypdone ();
             gwypfree (M);
             return (FALSE);
 	}
@@ -13407,6 +13052,7 @@ error:
                 abonroundoff = TRUE;	// Don't accept any more Roundoff error.
             _unlink (filename);
 	}
+//        gwypdone ();
 	goto restart;
 
 }
@@ -15725,19 +15371,22 @@ int process_num (
     int	retval;
     char outbuf[sgkbufsize+256];
 
+// Lei -remove a line and replace
+//	unsigned long ninput = n, binput = base;
     unsigned long ninput = n, base, binput, b_2up = 1, b_else = 1, superPRP = 1;
     long mult;
-    
+// Lei end
     nbllr_mallocs = nbllr_frees = 0;			// JP 29/11/23
     n_orig = n;
 
-    gformat = format; 		// save format in a global.
+    gformat = format; // save format in a global.
 
     if(mult = IniGetInt(INI_FILE, (char*)"StopOnPrimedK", 0)) {
         sprintf (outbuf, "ks%s", sgk);
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
-				// is the count for this k value reached ?
-            *res = FALSE;   	// then, skip this test
+                    // is the count for this k value reached ?
+            *res = FALSE;   // then, skip this test
+//            return TRUE;
             retval = TRUE;
             goto EXITPR;
         }
@@ -15745,8 +15394,9 @@ int process_num (
     else if(mult = IniGetInt(INI_FILE, (char*)"StopOnPrimedN", 0)) {
         sprintf (outbuf, "ns%lu", n);
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
-				// is the count for this n value reached ?
-            *res = FALSE;   	// then, skip this test
+                    // is the count for this n value reached ?
+            *res = FALSE;   // then, skip this test
+//            return TRUE;
             retval = TRUE;
             goto EXITPR;
         }
@@ -15754,63 +15404,71 @@ int process_num (
     else if(mult = IniGetInt(INI_FILE, (char*)"StopOnPrimedB", 0)) {
         sprintf (outbuf, "bs%s", sgb);
         if(IniGetInt(INI_FILE, outbuf, 0) >= mult) {
-				// is the count for this base value reached ?
-            *res = FALSE;   	// then, skip this test
+                    // is the count for this base value reached ?
+            *res = FALSE;   // then, skip this test
+//            return TRUE;
             retval = TRUE;
             goto EXITPR;
         }
     }
 
-    if (format == ABCGM) {  	// Do the primality test of a Gaussian Mersenne norm
+    if (format == ABCGM) {  // Do the primality test of a Gaussian Mersenne norm
+//        return (isGMNP (sgk, n, res));
         retval = isGMNP (sgk, n, res);
         goto EXITPR;
 
     }
 
-    if (format == ABCSP) {  	// Do the PRP test of a Wagstaff number
+    if (format == ABCSP) {  // Do the PRP test of a Wagstaff number
+//        return (isWSPRP (sgk, n, res));
         retval = isWSPRP (sgk, n, res);
         goto EXITPR;
     }
 
-    gb = newgiant (strlen(sgb) + 8);		// 03/09/24
-    nbllr_mallocs++;		// Allocate one byte per decimal digit + spares
-    ctog (sgb, gb); 		// Convert b string to giant
-    
-    if ((gb->sign <= 2)&&((IniGetInt(INI_FILE, (char*)"LargeBase", 0)==0)||(format==ABCK)||(format==ABCC))) {
-				// Test if the base is a small integer...
-        base = gb->n[0];	// Then, get the base in an unsigned long
+    gb = newgiant (strlen(sgb)/2 + 8);
+    nbllr_mallocs++;
+                // Allocate one byte per decimal digit + spares
+    ctog (sgb, gb); // Convert b string to giant
+    if (gb->sign <= 2) {// Test if the base is a small integer...
+        base = gb->n[0];// Then, get the base in an unsigned long
         if (gb->sign == 2)
             base += 65536*gb->n[1];
         binput = base;
         while (!(base&1) && base > 2) {
-				// Divide the base by two as far as possible
+            // Divide the base by two as far as possible
             base >>= 1;
             gshiftright (1, gb); // update also gb JP 21/10/22
             n += ninput;
         }
             
 
-        if (base != 2) {    	// Test if the base was a power of two
+        if (base != 2) {    // Test if the base was a power of two
+// Lei
             n -= ninput;
-            b_else = base;  	// Is odd...
+            b_else = base;  // Is odd...
             b_2up = binput / b_else;// binput = b_else*b_2up
-            if ((b_2up > b_else) && (!((format == ABCC) || (format == ABCK) || (format == ABCECK) || (format == ABCRU) || (format == ABCGRU) || (format == ABCVARAQS)))) {
+            if ((b_2up > b_else) && (!((format == ABCC) || (format == ABCK) || (format == ABCRU) || (format == ABCGRU) || (format == ABCVARAQS)))) {
                 superPRP = 0;   // Then b_2up^n > b_else^n
             }
             else {
+// Lei end
                 base = binput;
                 itog (binput, gb); // Restore also gb JP 21/10/22
-				// Do not modify because PRP will be forced...
+                    // Do not modify because PRP will be forced...
                 n = ninput;
             }
         }
-        
-        globalb = base;		// Keep the base of the candidate in a global
+        globalb = base;
+            // Keep the base of the candidate in a global
+	free (gb);		// gb is no more useful JP 28/11/23
+	nbllr_frees++;
 
+// Lei mod
         if (format == ABCDP) {
             retval = IsPRP (format, sgk, base, n, incr, shift, res);
             free (gb);
             nbllr_frees++;
+//            return (retval);
             goto EXITPR;
         }
         if (((base == 2) || (superPRP == 0)) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0) && ((incr == -1) || (incr == +1)) && (format != ABCVARAQS)) {
@@ -15819,16 +15477,18 @@ int process_num (
             else
                 retval = IniGetInt(INI_FILE, (char*)"TestW", 0) ? isProthW (format, sgk, n, shift, res) : isProthP (format, sgk, b_else, n, binput, ninput, shift, res);
        }
+// end Lei mod
         else if ((format == NPGCC1 || format == NPGCC2) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0)) {
             retval = IsCCP (format, sgk, base, n, incr, shift, res);
         }
         else if (!IniGetInt (INI_FILE, (char*)"ForcePRP", 0) && (incr ==   +1 || incr == -1) && (format != ABCVARAQS) && 
             (format != ABCRU) && (format != ABCGRU)) {
-            retval = plusminustest (sgk, base, gb, n, incr, shift, res);
+            retval = plusminustest (sgk, base, n, incr, shift, res);
         }
         else  {
             retval = IsPRP (format, sgk, base, n, incr, shift, res);
         }
+        goto EXITPR;			// JP 28/11/23
     }   // End gb is a small integer.
     else if ((format == NPGCC1 || format == NPGCC2) && !IniGetInt (INI_FILE, (char*)"ForcePRP", 0)) {
         retval = gIsCCP (format, sgk, sgb, gb, n, incr, shift, res);
@@ -15838,7 +15498,9 @@ int process_num (
         retval = gplusminustest (sgk, sgb, gb, n, incr, shift, res);
     }
     else  {
+//		fermat_only = TRUE;     // JP 30/01/17
         retval = gIsPRP (format, sgk, sgb, gb, n, incr, shift, res);
+//		fermat_only = FALSE;    // JP 30/01/17
     }
     free (gb);
     nbllr_frees++;
@@ -16048,9 +15710,6 @@ OPENFILE :
                 else if (!strcmp (pinput, ckstring)) {
                     format = ABCK;
                 }
-		else if (!strcmp (pinput, eckstring)) {
-		    format = ABCECK;
-		}
                 else if (!strcmp (pinput, dpstring)) {
                     format = ABCDP;
                 }
@@ -17098,9 +16757,9 @@ OPENFILE :
                     // b^n-b^m+c numbers ; sgb, n, m, c are the 4 parameters
                     if (sscanf (buff+begline, "%s %lu %lu %d", sgb, &n, &m, &incr) != 4)
                         continue;	// Skip invalid line
-                   if (!isDigitString(sgb))
+                    if (!isDigitString(sgb))
                         continue;	// Skip invalid line
-                   if (n <= m)
+                    if (n <= m)
                         continue;	// Skip invalid line
                     ndiff = n-m;
                         // Save difference of exponents in a global
@@ -17366,51 +17025,7 @@ OPENFILE :
                         IniWriteInt (INI_FILE, (char*)"ResultLine", line);	// update the result line
                     }
                 }
-		else if (format == ABCECK) {					// Extended Square minus two
-		    if (sscanf (buff+begline, "%s %lu %d", sgb, &n, &incr) != 3)
-			continue;						// Skip invalid line
-		    if (rising_ns && !rising_ks  && (n <= last_processed_n))
-			continue;						// Skip already processed n's
-		    if ((rising_ns && !rising_ks) || (!rising_ns && rising_ks))
-			fclose (fd);					// Unlock the file during the test...
-		    if (!strcmp(sgb, (char*)"2")) {				// Base two is special :
-			if (incr == 1) {
-			    format = ABCK;					// Kynea number
-			    sprintf (sgk, "(2^%lu+1)", n-1);
-			}
-			else if (incr == -1) {
-			    format = ABCC;					// Carol number
-			    sprintf (sgk, "(2^%lu-1)", n-1);
-			}
-			else
-			    continue;
-			sprintf (sgb, "2");
-			if (! process_num (format, sgk, (char*)"2", n+1, -1, shift, &res)) {
-			    format = ABCECK;				// reinitialize the general format
-			    goto done;
-			}
-			format = ABCECK;					// reinitialize the general format
-		    }
-		    else {
-			sprintf (sgk, "%s^%lu+%d",  sgb, n, 2*incr);
-			if (! process_num (format, sgk, sgb, n, incr, shift, &res))
-			    goto done;
-		    }
-		    if (res) {
-			    resultline = IniGetInt(INI_FILE, (char*)"ResultLine", 0);
-			    outfd = _open (outputfile, _O_TEXT | _O_RDWR | _O_APPEND | _O_CREAT, 0666);
-			    if (outfd) {
-				    if (hline >= resultline) {		// write the relevant header
-					writelg = _write (outfd, hbuff, strlen (hbuff));
-				    }
-				sprintf (outbuf, "%s %lu %d\n",sgb, n, incr); 
-				writelg = _write (outfd, outbuf, strlen (outbuf));
-				_close (outfd);
-			    }
-			IniWriteInt (INI_FILE, (char*)"ResultLine", line);	// update the result line
-		    }
-		}
-	    }	// End processing a data line
+            }	// End processing a data line
             
 //            if (nbllr_mallocs!=nbllr_frees)
 //                printf ("Number of LLR mallocs = %d although Number of LLR frees = %d\n", nbllr_mallocs, nbllr_frees);

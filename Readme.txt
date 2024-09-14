@@ -1,10 +1,13 @@
 
-		Welcome to llrCUDA program Version 3.8.8 !
+		Welcome to llrCUDA program Version 3.8.9 !
 
 
-0) What is new in this version :
-
-  The only new feature in this version is to allow the access to
+0) What is new or recent in this version :
+  - Two new ABC format input files can now be processed, that are :
+  ABC($a^$b$c)^2-2 which is Extended Square minus two, or Near Square.
+  (Note : $a being even and $c = +-1, a Morrison test is always possible.)
+  ABC$a^$b-$a^$c$d which can be processed as k*b^n+c if $b > $c
+  Also, a new feature in this version is to allow the access to
   sqrt(-1) modulo P when P is a Proth or Gaussian Mersenne norm prime.
   To do that, four options are implemented :
   -oPrtsqrtm1=<base> : print data if 2<=base<=36 , 64bit residue if base = 1
@@ -26,7 +29,7 @@
   - In Proth or LLR tests, even values of k yield a false result...
   These bugs are now fixed.
   May 2022 : The range of available FFT lengthes has been extended using 
-  SSE2 Woltman tables. This allowed this version to test successfully
+  SSE2 Woltman's tables. This allowed this version to test successfully
   M82589933 in less than 8 days!
   In previous Version 3.8.4, one call to free() function was missing in Gerbicz
   error checking code ; this caused an important memory leak...

@@ -581,8 +581,8 @@ int isLucasBaseQ(giant N, uint32_t D, int sign) {
 //	}
 }
 
-int genLucasBaseP(giant N, uint32_t PARG) {
-	uint32_t NmodD, D, dred, Nmod8, P;
+int genLucasBaseP(giant N, uint32_t P0) {
+	uint32_t P, NmodD, D, dred, Nmod8;
 	int jNp, chgsign;
 
 //	Return the least P such as D = P^2-4 and kronecker (D, N) = -1
@@ -591,7 +591,7 @@ int genLucasBaseP(giant N, uint32_t PARG) {
 
 	Nmod8 = N->n[0] & 7;
 
-	for (P = PARG; P*P<=2147483647; P++) {
+	for (P=P0; P*P<=2147483647; P++) {
 		D = P*P-4;
 		dred = D;
 		chgsign = 1;
@@ -620,8 +620,8 @@ int genLucasBaseP(giant N, uint32_t PARG) {
 	return (-1);
 }
 
-long generalLucasBase(giant N, uint32_t *PARG, uint32_t *Q) {
-	uint32_t NmodD, D, dred, Nmod8, NmodPQD, gcdNPQD, *P;
+long generalLucasBase(giant N, uint32_t *P0, uint32_t *Q) {
+	uint32_t *P, NmodD, D, dred, Nmod8, NmodPQD, gcdNPQD;
 	int jNp, chgsign;
 
 //	Return the least D = P^2-4*Q such as kronecker (D, N) = -1
@@ -630,8 +630,8 @@ long generalLucasBase(giant N, uint32_t *PARG, uint32_t *Q) {
 
 	Nmod8 = N->n[0] & 7;
 
-	for (P=PARG; (*P)*(*P)<=2147483647; (*P)++) {
-		for ((*Q)=2; 4*(*Q)<(*P)*(*P); (*Q)++) {
+	for (P=P0; (*P)*(*P)<=2147483647; (*P)++) {
+		for ( ; 4*(*Q)<(*P)*(*P); (*Q)++) {
 			D = (*P)*(*P)-4*(*Q);
 			if ((uint32_t)(floor(sqrt ((double)D)) * floor(sqrt ((double)D))) == D) {
 				continue;

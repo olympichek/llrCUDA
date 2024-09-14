@@ -3,7 +3,7 @@
 
 /* Constants */
 
-#define VERSION		"3.8.8"
+#define VERSION		"3.8.9"
 
 short default_work_type (void);
 #define WORK_FACTOR		0
