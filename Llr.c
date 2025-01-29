@@ -10916,7 +10916,7 @@ restart:
 		tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
 	}
 	else {
-		gwypsetmaxmulbyconst (max(abs(a), abs(P)));
+		gwypsetmaxmulbyconst (max(abs(a), P));
 		explen = bitlen (tmp);
 		if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
 			gwypfree(gk);
@@ -11276,7 +11276,7 @@ DoLucas:
 					gwypdone ();
 								// Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-					gwypsetmaxmulbyconst (max(abs(a), abs(P)));
+					gwypsetmaxmulbyconst (max(abs(a), P));
 					if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
 						gwypfree(gk);
 						gwypfree(N);
@@ -12740,7 +12740,7 @@ restart:
 	gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
 
 	if ((gformat != ABCECK) && (incr == +1)) {	// Pocklington test.
-            gwypsetmaxmulbyconst (abs(a));
+            gwypsetmaxmulbyconst (a);
 	    gwypdivg (gb, tmp);          // tmp = (N-1)/base
             explen = bitlen (tmp);
 	    if (format == ABCDN && n == ndiff) {	// Batalov 31/05/23
@@ -12778,7 +12778,7 @@ restart:
 	    tmp3 = newgiant (2*FFTLEN*sizeof(double)/sizeof(short) + 16);// Allocate memory for tmp3
 	}
 	else {				// Morrison test
-            gwypsetmaxmulbyconst (max(abs(a), abs(P)));
+            gwypsetmaxmulbyconst (max(a, P));
             explen = bitlen (tmp);
 		if (gb->sign <= 2) {
 		    if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
@@ -13148,7 +13148,7 @@ DoLucas:
 					gwypdone ();
                                 // Setup again the gwypnum code.
 					gwypset_larger_fftlen_count(IniGetInt(INI_FILE, (char*)"FFT_Increment", 0));
-					gwypsetmaxmulbyconst (max(abs(a),abs(P)));
+					gwypsetmaxmulbyconst (max(a, P));
 //					if (!setupok (gwypsetup (dk,(gb->sign <= 2)?base:1, n, -1, N), N, str, res)) {
 				    if (gb->sign <= 2) {
 					if (!setupok (gwypsetup (dk, base, n, -1, N), N, str, res)) {
